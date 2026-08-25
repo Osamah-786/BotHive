@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "./styles/globals.css";
+
 
 @custom-variant dark (&:is(.dark *));
 
@@ -49,38 +51,38 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --background: #1a1209;
+    --foreground: #fef3c7;
+    --card: #120c05;
+    --card-foreground: #fef3c7;
+    --popover: #120c05;
+    --popover-foreground: #fef3c7;
+    --primary: #f59e0b;
+    --primary-foreground: #1a1209;
+    --secondary: #2d1d0b;
+    --secondary-foreground: #fef3c7;
+    --muted: #2d1d0b;
+    --muted-foreground: #b98243;
+    --accent: #6b4226;
+    --accent-foreground: #fef3c7;
+    --destructive: #ef4444;
+    --border: #4b3218;
+    --input: #6b4226;
+    --ring: #f59e0b;
+    --chart-1: #f87171;
+    --chart-2: #4ade80;
+    --chart-3: #f59e0b;
+    --chart-4: #d6a55b;
+    --chart-5: #6b4226;
+    --radius: 0;
+    --sidebar: #120c05;
+    --sidebar-foreground: #fef3c7;
+    --sidebar-primary: #f59e0b;
+    --sidebar-primary-foreground: #1a1209;
+    --sidebar-accent: #2d1d0b;
+    --sidebar-accent-foreground: #fef3c7;
+    --sidebar-border: #4b3218;
+    --sidebar-ring: #f59e0b;
 }
 
 .dark {
@@ -120,11 +122,24 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
-  body {
-    @apply bg-background text-foreground;
-    }
+  }
   html {
+    /* Always dark — the warehouse theme has no light variant */
     @apply font-sans;
-    }
+  }
+  body {
+    /* Warehouse dark brown — prevents white flash before React mounts */
+    background: #1a1209;
+    color: #fef3c7;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+  }
+  ::selection {
+    background: #f59e0b;
+    color: #1a1209;
+  }
 }

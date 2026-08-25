@@ -1,0 +1,100 @@
+/*
+ * AMR Fleet Sim — globals.css
+ *
+ * Warehouse-tone design system globals.
+ * Imported by main.tsx (via index.css @layer base).
+ *
+ * Palette key:
+ *   Background deep  #0f0a04  — near-black, charred wood
+ *   Background mid   #1a1209  — warehouse floor in shadow
+ *   Background panel #120c05  — instrument panels
+ *   Border           #4b3218  — raw metal edge
+ *   Accent amber     #f59e0b  — primary call-to-action, clock
+ *   Cloud red        #f87171  — traditional / centralized
+ *   Mesh green       #4ade80  — proposed / decentralized P2P
+ *   Text primary     #fef3c7  — warm cream
+ *   Text secondary   #d6a55b  — weathered amber
+ *   Text muted       #80603c  — dark caramel label
+ */
+
+/* ── Scrollbar — matches the dark warehouse theme ───────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f0a04;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #4b3218;
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6b4226;
+}
+
+/* ── Focus ring — amber, no browser default blue ───────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+/* ── Range input — accent matches chaos lab cloud-lag slider ────────────────── */
+
+input[type='range'] {
+  accent-color: #f59e0b;
+  cursor: pointer;
+}
+
+/* ── Recharts chart tooltip z-index fix ────────────────────────────────────── */
+
+.recharts-tooltip-wrapper {
+  z-index: 50;
+  pointer-events: none;
+}
+
+/* ── Monospace tabular numerics — used for all live counters ────────────────── */
+
+.tabular-mono {
+  font-family: 'Geist Variable', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+/* ── Utility: hardware-accelerated glow pulse animation ─────────────────────── */
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.glow-pulse {
+  animation: glow-pulse 1.2s ease-in-out infinite;
+}
+
+/* ── Utility: dim scan-line overlay for panel authenticity ──────────────────── */
+
+@keyframes scan {
+  from { background-position: 0 0; }
+  to   { background-position: 0 4px; }
+}
+
+.scanlines::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 3px,
+    rgba(0, 0, 0, 0.07) 3px,
+    rgba(0, 0, 0, 0.07) 4px
+  );
+  animation: scan 0.3s linear infinite;
+}
