@@ -45,7 +45,7 @@ The screen splits into two live warehouses running the same 3-robot, 6-station w
 | Layer | Technology |
 |---|---|
 | UI Framework | React 19 + TypeScript + Vite 8 |
-| 3D Rendering | React Three Fiber + @react-three/drei |
+| Warehouse rendering | Phaser 4 custom industrial assets |
 | State | Zustand |
 | Charts | Recharts |
 | Styling | Tailwind CSS v4 + shadcn/ui |
@@ -74,11 +74,13 @@ src/
 │   │   ├── MetricsPanel.tsx  — 3 live Recharts (tasks, idle, conflicts)
 │   │   └── ChaosPanel.tsx    — Fault injection controls
 │   ├── simulation/
-│   │   ├── WarehouseCanvas.tsx — R3F canvas wrapper + banner
-│   │   ├── WarehouseGrid.tsx   — 280-tile grid renderer with station labels
-│   │   ├── RobotMesh.tsx       — AMR disc, task ring, path dots, battery %
-│   │   ├── P2PLines.tsx        — Animated P2P communication links
-│   │   └── ObstacleMesh.tsx    — Pulsing blocked-aisle marker
+│   │   ├── WarehouseCanvas.tsx  — Panel banner + Phaser viewport wrapper
+│   │   └── PhaserWarehouse.tsx  — Live engine-to-Phaser rendering bridge
+│   ├── custom-assets/
+│   │   ├── AMR.ts               — Forklift-style AMR with pallet state
+│   │   ├── Aisle.ts             — Detailed rack bays and stock
+│   │   ├── Obstacle.ts          — Animated safety barrier
+│   │   └── WarehouseBlock.ts    — Dense storage-bank shell
 │   └── ui/
 │       ├── MetricCard.tsx   — Cloud vs P2P paired stat card
 │       └── SimControls.tsx  — Play / Pause / Restart / Speed
@@ -122,15 +124,16 @@ npm run build
 - P2P broadcast range: Manhattan distance ≤ 10 tiles; conflict messages go direct even out of range
 - Battery: drains 0.5% per move, **recharges to 100% on each completed delivery**
 
-### Robot visual encoding
+### Warehouse visual encoding
 | Visual | Meaning |
 |---|---|
-| **Amber ring** around robot | Heading to pickup station |
-| **Orange ring** around robot | Heading to dropoff station |
-| **Faint dots** trailing the robot | A\* path preview (up to 12 waypoints) |
-| **Red pulsing glow** | Robot is frozen (cloud killed) |
-| **Battery % in red** | Below 25% charge |
-| **Green animated lines** | Active P2P communication link (Proposed side) |
+| **Forklift AMR + pallet** | A working robot; pallet appears while carrying to dropoff |
+| **Safety-yellow ring** | Heading to pickup station |
+| **Orange ring** | Heading to dropoff station |
+| **Red highlighted ring + LOST** | Robot is frozen because cloud connectivity is gone |
+| **Battery label** | Live battery percentage; yellow below 25% |
+| **Green animated links** | Active P2P communication link (Proposed side) |
+| **Orange/white barrier** | A dynamically blocked floor cell; click it or Clear aisle to remove |
 
 ---
 

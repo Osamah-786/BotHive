@@ -14,11 +14,11 @@ export function SimControls() {
 
   return (
     <section className="flex items-center gap-2" aria-label="Simulation controls">
-      <div className="flex overflow-hidden border border-[#5c3d1a] bg-[#120c05]">
+      <div className="flex overflow-hidden border border-[#31585a] bg-[#0c2021]">
         <button
           type="button"
           onClick={isPlaying ? pause : play}
-          className="inline-flex h-8 items-center gap-1.5 border-r border-[#5c3d1a] px-2.5 font-mono text-[10px] font-bold tracking-[0.12em] uppercase text-[#fef3c7] transition-colors hover:bg-[#2d1d0b] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#f59e0b]"
+          className="inline-flex h-8 items-center gap-1.5 border-r border-[#31585a] px-2.5 font-mono text-[10px] font-bold tracking-[0.12em] uppercase text-[#e5f3ee] transition-colors hover:bg-[#123031] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#f2c14e]"
           aria-label={isPlaying ? 'Pause simulation' : 'Resume simulation'}
         >
           {isPlaying ? <Pause size={13} strokeWidth={2.4} /> : <Play size={13} strokeWidth={2.4} />}
@@ -27,7 +27,7 @@ export function SimControls() {
         <button
           type="button"
           onClick={restart}
-          className="inline-flex h-8 items-center justify-center px-2 text-[#d6a55b] transition-colors hover:bg-[#2d1d0b] hover:text-[#fef3c7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#f59e0b]"
+          className="inline-flex h-8 items-center justify-center px-2 text-[#86aaa4] transition-colors hover:bg-[#123031] hover:text-[#e5f3ee] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#f2c14e]"
           aria-label="Restart simulation"
           title="Restart simulation"
         >
@@ -35,8 +35,8 @@ export function SimControls() {
         </button>
       </div>
 
-      <div className="flex items-center border border-[#5c3d1a] bg-[#120c05]" aria-label="Simulation speed">
-        <span className="px-2 font-mono text-[9px] tracking-[0.14em] text-[#a6783c] uppercase">Rate</span>
+      <div className="flex items-center border border-[#31585a] bg-[#0c2021]" aria-label="Simulation speed">
+        <span className="px-2 font-mono text-[9px] tracking-[0.14em] text-[#86aaa4] uppercase">Rate</span>
         {SPEEDS.map((value) => {
           const selected = speed === value;
           return (
@@ -45,10 +45,10 @@ export function SimControls() {
               type="button"
               onClick={() => setSpeed(value)}
               aria-pressed={selected}
-              className="h-8 min-w-8 border-l border-[#5c3d1a] px-1.5 font-mono text-[10px] font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#f59e0b]"
+              className="h-8 min-w-8 border-l border-[#31585a] px-1.5 font-mono text-[10px] font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#f2c14e]"
               style={{
-                background: selected ? '#f59e0b' : 'transparent',
-                color: selected ? '#1a1209' : '#d6a55b',
+                background: selected ? '#f2c14e' : 'transparent',
+                color: selected ? '#071617' : '#86aaa4',
               }}
             >
               {value}×

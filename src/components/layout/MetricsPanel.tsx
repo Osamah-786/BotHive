@@ -23,8 +23,8 @@ type ChartDatum = {
   meshConflicts: number;
 };
 
-const CLOUD = '#f87171';
-const MESH = '#4ade80';
+const CLOUD = '#f15b5b';
+const MESH = '#51d38d';
 
 /** Live, compact mission ledger driven directly by the simulation store. */
 export function MetricsPanel() {
@@ -34,21 +34,21 @@ export function MetricsPanel() {
   const chartData = buildChartData(tick, traditional, proposed);
 
   return (
-    <section className="flex h-[206px] flex-shrink-0 flex-col border-t border-[#4b3218] bg-[#0d0905]" aria-label="Fleet telemetry">
-      <div className="flex h-8 flex-shrink-0 items-center justify-between border-b border-[#30200f] px-4 md:px-5">
+    <section className="flex h-[206px] flex-shrink-0 flex-col border-t border-[#244446] bg-[#081a1b]" aria-label="Fleet telemetry">
+      <div className="flex h-8 flex-shrink-0 items-center justify-between border-b border-[#173738] px-4 md:px-5">
         <div className="flex items-center gap-2">
-          <Activity size={13} className="text-[#f59e0b]" aria-hidden="true" />
-          <h2 className="font-mono text-[10px] font-bold tracking-[0.2em] text-[#fef3c7] uppercase">Fleet telemetry</h2>
-          <span className="font-mono text-[8px] tracking-[0.12em] text-[#80603c] uppercase">live comparison</span>
+          <Activity size={13} className="text-[#f2c14e]" aria-hidden="true" />
+          <h2 className="font-mono text-[10px] font-bold tracking-[0.2em] text-[#e5f3ee] uppercase">Fleet telemetry</h2>
+          <span className="font-mono text-[8px] tracking-[0.12em] text-[#60817d] uppercase">live comparison</span>
         </div>
-        <div className="flex items-center gap-1.5 font-mono text-[9px] tabular-nums text-[#d6a55b]">
-          <RadioTower size={12} className="text-[#4ade80]" aria-hidden="true" />
+        <div className="flex items-center gap-1.5 font-mono text-[9px] tabular-nums text-[#86aaa4]">
+          <RadioTower size={12} className="text-[#51d38d]" aria-hidden="true" />
           T+{formatSeconds(tick)}s
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-px bg-[#4b3218] lg:grid-cols-[minmax(390px,0.95fr)_minmax(560px,1.5fr)]">
-        <div className="grid grid-cols-3 gap-px bg-[#4b3218]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-px bg-[#244446] lg:grid-cols-[minmax(390px,0.95fr)_minmax(560px,1.5fr)]">
+        <div className="grid grid-cols-3 gap-px bg-[#244446]">
           <MetricCard
             label="Tasks done"
             cloudValue={String(traditional.totalTasksCompleted)}
@@ -69,7 +69,7 @@ export function MetricsPanel() {
           />
         </div>
 
-        <div className="grid min-h-0 grid-cols-3 gap-px bg-[#4b3218]">
+        <div className="grid min-h-0 grid-cols-3 gap-px bg-[#244446]">
           <TrendChart title="Tasks complete" data={chartData} cloudKey="cloudTasks" meshKey="meshTasks" kind="line" />
           <TrendChart title="Cumulative idle" data={chartData} cloudKey="cloudIdle" meshKey="meshIdle" kind="area" />
           <TrendChart title="Conflict events" data={chartData} cloudKey="cloudConflicts" meshKey="meshConflicts" kind="line" />
@@ -89,20 +89,20 @@ interface TrendChartProps {
 
 function TrendChart({ title, data, cloudKey, meshKey, kind }: TrendChartProps) {
   const tooltipStyle = {
-    background: '#120c05',
-    border: '1px solid #6b4226',
-    color: '#fef3c7',
+    background: '#0c2021',
+    border: '1px solid #31585a',
+    color: '#e5f3ee',
     fontFamily: 'monospace',
     fontSize: '10px',
   };
 
   return (
-    <article className="min-w-0 bg-[#120c05] px-2.5 py-2">
+    <article className="min-w-0 bg-[#0c2021] px-2.5 py-2">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="truncate font-mono text-[9px] font-bold tracking-[0.1em] text-[#d6a55b] uppercase">{title}</h3>
+        <h3 className="truncate font-mono text-[9px] font-bold tracking-[0.1em] text-[#86aaa4] uppercase">{title}</h3>
         <div className="flex items-center gap-1.5" aria-label="Cloud red, P2P green">
-          <i className="h-1.5 w-1.5 rounded-full bg-[#f87171]" />
-          <i className="h-1.5 w-1.5 rounded-full bg-[#4ade80]" />
+          <i className="h-1.5 w-1.5 rounded-full bg-[#f15b5b]" />
+          <i className="h-1.5 w-1.5 rounded-full bg-[#51d38d]" />
         </div>
       </div>
       <div className="mt-1 h-[132px] min-w-0">
@@ -129,8 +129,8 @@ function TrendChart({ title, data, cloudKey, meshKey, kind }: TrendChartProps) {
 function CompactTooltip({ active, payload, label }: TooltipContentProps) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="font-mono text-[10px] text-[#fef3c7]">
-      <p className="mb-1 text-[#d6a55b]">tick {label}</p>
+    <div className="font-mono text-[10px] text-[#e5f3ee]">
+      <p className="mb-1 text-[#86aaa4]">tick {label}</p>
       {payload.map((entry) => (
         <p key={String(entry.dataKey)} style={{ color: entry.color }}>{entry.name}: {entry.value}</p>
       ))}

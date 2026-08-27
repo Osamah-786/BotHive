@@ -25,7 +25,7 @@ export default function App() {
   return (
     <div
       className="flex h-screen w-screen flex-col overflow-hidden"
-      style={{ background: '#1a1209', fontFamily: "'Geist Variable', monospace" }}
+      style={{ background: '#071617', fontFamily: "'Geist Variable', monospace" }}
     >
       <Header />
 

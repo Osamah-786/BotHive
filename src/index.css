@@ -51,38 +51,38 @@
 }
 
 :root {
-    --background: #1a1209;
-    --foreground: #fef3c7;
-    --card: #120c05;
-    --card-foreground: #fef3c7;
-    --popover: #120c05;
-    --popover-foreground: #fef3c7;
-    --primary: #f59e0b;
-    --primary-foreground: #1a1209;
-    --secondary: #2d1d0b;
-    --secondary-foreground: #fef3c7;
-    --muted: #2d1d0b;
-    --muted-foreground: #b98243;
-    --accent: #6b4226;
-    --accent-foreground: #fef3c7;
-    --destructive: #ef4444;
-    --border: #4b3218;
-    --input: #6b4226;
-    --ring: #f59e0b;
-    --chart-1: #f87171;
-    --chart-2: #4ade80;
-    --chart-3: #f59e0b;
-    --chart-4: #d6a55b;
-    --chart-5: #6b4226;
+    --background: #071617;
+    --foreground: #e5f3ee;
+    --card: #0c2021;
+    --card-foreground: #e5f3ee;
+    --popover: #0c2021;
+    --popover-foreground: #e5f3ee;
+    --primary: #f2c14e;
+    --primary-foreground: #071617;
+    --secondary: #123031;
+    --secondary-foreground: #e5f3ee;
+    --muted: #123031;
+    --muted-foreground: #86aaa4;
+    --accent: #244446;
+    --accent-foreground: #e5f3ee;
+    --destructive: #f15b5b;
+    --border: #244446;
+    --input: #31585a;
+    --ring: #f2c14e;
+    --chart-1: #f15b5b;
+    --chart-2: #51d38d;
+    --chart-3: #f2c14e;
+    --chart-4: #86aaa4;
+    --chart-5: #244446;
     --radius: 0;
-    --sidebar: #120c05;
-    --sidebar-foreground: #fef3c7;
-    --sidebar-primary: #f59e0b;
-    --sidebar-primary-foreground: #1a1209;
-    --sidebar-accent: #2d1d0b;
-    --sidebar-accent-foreground: #fef3c7;
-    --sidebar-border: #4b3218;
-    --sidebar-ring: #f59e0b;
+    --sidebar: #0c2021;
+    --sidebar-foreground: #e5f3ee;
+    --sidebar-primary: #f2c14e;
+    --sidebar-primary-foreground: #071617;
+    --sidebar-accent: #123031;
+    --sidebar-accent-foreground: #e5f3ee;
+    --sidebar-border: #244446;
+    --sidebar-ring: #f2c14e;
 }
 
 .dark {
@@ -129,8 +129,8 @@
   }
   body {
     /* Warehouse dark brown — prevents white flash before React mounts */
-    background: #1a1209;
-    color: #fef3c7;
+    background: #071617;
+    color: #e5f3ee;
     margin: 0;
     padding: 0;
     overflow: hidden;
@@ -139,7 +139,7 @@
     display: block;
   }
   ::selection {
-    background: #f59e0b;
-    color: #1a1209;
+    background: #f2c14e;
+    color: #071617;
   }
 }

@@ -1,20 +1,16 @@
 /*
  * AMR Fleet Sim — globals.css
  *
- * Warehouse-tone design system globals.
+ * Operations-console design system globals.
  * Imported by main.tsx (via index.css @layer base).
  *
  * Palette key:
- *   Background deep  #0f0a04  — near-black, charred wood
- *   Background mid   #1a1209  — warehouse floor in shadow
- *   Background panel #120c05  — instrument panels
- *   Border           #4b3218  — raw metal edge
- *   Accent amber     #f59e0b  — primary call-to-action, clock
- *   Cloud red        #f87171  — traditional / centralized
- *   Mesh green       #4ade80  — proposed / decentralized P2P
- *   Text primary     #fef3c7  — warm cream
- *   Text secondary   #d6a55b  — weathered amber
- *   Text muted       #80603c  — dark caramel label
+ *   Background deep  #071617  — night-shift operations floor
+ *   Background panel #0c2021  — instrument panels
+ *   Border           #244446  — oxidised steel edge
+ *   Accent yellow    #f2c14e  — safety action / live clock
+ *   Cloud red        #f15b5b  — centralized planner
+ *   Mesh green       #51d38d  — decentralized P2P
  */
 
 /* ── Scrollbar — matches the dark warehouse theme ───────────────────────────── */
@@ -25,29 +21,29 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f0a04;
+  background: #071617;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #4b3218;
+  background: #244446;
   border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #6b4226;
+  background: #31585a;
 }
 
 /* ── Focus ring — amber, no browser default blue ───────────────────────────── */
 
 :focus-visible {
-  outline: 2px solid #f59e0b;
+  outline: 2px solid #f2c14e;
   outline-offset: 2px;
 }
 
 /* ── Range input — accent matches chaos lab cloud-lag slider ────────────────── */
 
 input[type='range'] {
-  accent-color: #f59e0b;
+  accent-color: #f2c14e;
   cursor: pointer;
 }
 
