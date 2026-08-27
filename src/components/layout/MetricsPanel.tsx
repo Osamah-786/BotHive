@@ -27,14 +27,17 @@ const CLOUD = '#f15b5b';
 const MESH = '#51d38d';
 
 /** Live, compact mission ledger driven directly by the simulation store. */
-export function MetricsPanel() {
+export function MetricsPanel({ fullPage }: { fullPage?: boolean }) {
   const tick = useSimStore((state) => state.tick);
   const traditional = useSimStore((state) => state.traditional.metrics);
   const proposed = useSimStore((state) => state.proposed.metrics);
   const chartData = buildChartData(tick, traditional, proposed);
 
   return (
-    <section className="flex h-[206px] flex-shrink-0 flex-col border-t border-[#244446] bg-[#081a1b]" aria-label="Fleet telemetry">
+    <section 
+      className={`flex flex-col border-[#244446] bg-[#081a1b] ${fullPage ? 'h-full border' : 'h-[206px] flex-shrink-0 border-t'}`} 
+      aria-label="Fleet telemetry"
+    >
       <div className="flex h-8 flex-shrink-0 items-center justify-between border-b border-[#173738] px-4 md:px-5">
         <div className="flex items-center gap-2">
           <Activity size={13} className="text-[#f2c14e]" aria-hidden="true" />
@@ -47,8 +50,8 @@ export function MetricsPanel() {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-px bg-[#244446] lg:grid-cols-[minmax(390px,0.95fr)_minmax(560px,1.5fr)]">
-        <div className="grid grid-cols-3 gap-px bg-[#244446]">
+      <div className={`grid min-h-0 flex-1 gap-px bg-[#244446] ${fullPage ? 'grid-cols-1 grid-rows-[auto_1fr]' : 'grid-cols-1 lg:grid-cols-[minmax(390px,0.95fr)_minmax(560px,1.5fr)]'}`}>
+        <div className={`grid gap-px bg-[#244446] ${fullPage ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-3'}`}>
           <MetricCard
             label="Tasks done"
             cloudValue={String(traditional.totalTasksCompleted)}
@@ -69,10 +72,10 @@ export function MetricsPanel() {
           />
         </div>
 
-        <div className="grid min-h-0 grid-cols-3 gap-px bg-[#244446]">
-          <TrendChart title="Tasks complete" data={chartData} cloudKey="cloudTasks" meshKey="meshTasks" kind="line" />
-          <TrendChart title="Cumulative idle" data={chartData} cloudKey="cloudIdle" meshKey="meshIdle" kind="area" />
-          <TrendChart title="Conflict events" data={chartData} cloudKey="cloudConflicts" meshKey="meshConflicts" kind="line" />
+        <div className={`grid min-h-0 gap-px bg-[#244446] ${fullPage ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-3'}`}>
+          <TrendChart title="Tasks complete" data={chartData} cloudKey="cloudTasks" meshKey="meshTasks" kind="line" fullPage={fullPage} />
+          <TrendChart title="Cumulative idle" data={chartData} cloudKey="cloudIdle" meshKey="meshIdle" kind="area" fullPage={fullPage} />
+          <TrendChart title="Conflict events" data={chartData} cloudKey="cloudConflicts" meshKey="meshConflicts" kind="line" fullPage={fullPage} />
         </div>
       </div>
     </section>
@@ -85,9 +88,10 @@ interface TrendChartProps {
   cloudKey: keyof ChartDatum;
   meshKey: keyof ChartDatum;
   kind: 'line' | 'area';
+  fullPage?: boolean;
 }
 
-function TrendChart({ title, data, cloudKey, meshKey, kind }: TrendChartProps) {
+function TrendChart({ title, data, cloudKey, meshKey, kind, fullPage }: TrendChartProps) {
   const tooltipStyle = {
     background: '#0c2021',
     border: '1px solid #31585a',
@@ -97,15 +101,15 @@ function TrendChart({ title, data, cloudKey, meshKey, kind }: TrendChartProps) {
   };
 
   return (
-    <article className="min-w-0 bg-[#0c2021] px-2.5 py-2">
-      <div className="flex items-center justify-between gap-2">
+    <article className="min-w-0 bg-[#0c2021] px-2.5 py-2 flex flex-col">
+      <div className="flex flex-shrink-0 items-center justify-between gap-2">
         <h3 className="truncate font-mono text-[9px] font-bold tracking-[0.1em] text-[#86aaa4] uppercase">{title}</h3>
         <div className="flex items-center gap-1.5" aria-label="Cloud red, P2P green">
           <i className="h-1.5 w-1.5 rounded-full bg-[#f15b5b]" />
           <i className="h-1.5 w-1.5 rounded-full bg-[#51d38d]" />
         </div>
       </div>
-      <div className="mt-1 h-[132px] min-w-0">
+      <div className={`mt-1 min-w-0 flex-1 ${fullPage ? 'min-h-[200px]' : 'h-[132px]'}`}>
         <ResponsiveContainer width="100%" height="100%">
           {kind === 'area' ? (
             <AreaChart data={data} margin={{ top: 8, right: 2, bottom: 0, left: 2 }}>

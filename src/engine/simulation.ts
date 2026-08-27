@@ -40,8 +40,21 @@ export function cloneRobot(robot: Robot): Robot {
   };
 }
 
+export const MAX_TASKS = 6;
+
 export function advanceTaskAfterArrival(robot: Robot, tick: number): Robot {
   const arrivedAtDropoff = robot.task === 'dropoff';
+  const newTasksCompleted = robot.tasksCompleted + (arrivedAtDropoff ? 1 : 0);
+
+  if (newTasksCompleted >= MAX_TASKS) {
+    return {
+      ...robot,
+      path: [],
+      tasksCompleted: newTasksCompleted,
+      state: 'frozen',
+      battery: 100,
+    };
+  }
 
   return {
     ...robot,
@@ -50,7 +63,7 @@ export function advanceTaskAfterArrival(robot: Robot, tick: number): Robot {
     urgency: urgencyFor(robot.id, tick),
     // Simulation ticks are deterministic; this timestamp is a stable tiebreaker.
     timestamp: tick * BASE_TICK_MS,
-    tasksCompleted: robot.tasksCompleted + (arrivedAtDropoff ? 1 : 0),
+    tasksCompleted: newTasksCompleted,
     // Robots recharge fully when they complete a delivery cycle (dropped off).
     // This keeps the battery readout live and meaningful across long demo runs.
     battery: arrivedAtDropoff ? 100 : robot.battery,

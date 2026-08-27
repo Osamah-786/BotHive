@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Route, Switch } from 'wouter';
 import { Header } from './components/layout/Header';
 import { MetricsPanel } from './components/layout/MetricsPanel';
 import { SplitView } from './components/layout/SplitView';
@@ -29,12 +30,19 @@ export default function App() {
     >
       <Header />
 
-      {/* ── Main split-screen simulation view ── */}
-      <main className="min-h-0 flex-1">
-        <SplitView />
-      </main>
-
-      <MetricsPanel />
+      <Switch>
+        <Route path="/">
+          {/* ── Main split-screen simulation view ── */}
+          <main className="min-h-0 flex-1">
+            <SplitView />
+          </main>
+        </Route>
+        <Route path="/dashboard">
+          <main className="min-h-0 flex-1 flex flex-col p-4">
+            <MetricsPanel fullPage />
+          </main>
+        </Route>
+      </Switch>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { aStar, type GridPos } from './astar';
 import {
   advanceTaskAfterArrival,
   cloneRobot,
+  MAX_TASKS,
   metricsAfterTick,
   sameCell,
   taskTarget,
@@ -49,16 +50,17 @@ export function proposedTick(
     }
   }
 
-  const robots = planned.map((robot) =>
-    yielding.has(robot.id)
+  const robots = planned.map((robot) => {
+    if (robot.tasksCompleted >= MAX_TASKS) return { ...robot, state: 'frozen' as const };
+    return yielding.has(robot.id)
       ? {
           ...robot,
           state: 'waiting' as const,
           idleTime: robot.idleTime + 1,
           conflictsResolved: robot.conflictsResolved + 1,
         }
-      : moveOneCell(robot, tick),
-  );
+      : moveOneCell(robot, tick)
+  });
 
   return {
     robots,
@@ -68,13 +70,15 @@ export function proposedTick(
 }
 
 function prepareRobot(source: Robot, blockedCells: Set<string>, tick: number): Robot {
+  if (source.tasksCompleted >= MAX_TASKS) return { ...source, state: 'frozen', path: [] };
+
   let robot = cloneRobot(source);
   if (sameCell(robot.position, taskTarget(robot)) && robot.path.length === 0) {
     robot = advanceTaskAfterArrival(robot, tick);
   }
 
   // Local planning runs every tick, so a new obstacle is propagated immediately.
-  if (robot.path.length === 0 || robot.path.some((cell) => blockedCells.has(`${cell.x},${cell.y}`))) {
+  if (robot.tasksCompleted < MAX_TASKS && (robot.path.length === 0 || robot.path.some((cell) => blockedCells.has(`${cell.x},${cell.y}`)))) {
     robot = { ...robot, path: aStar(robot.position, taskTarget(robot), blockedCells) };
   }
   return robot;
@@ -112,6 +116,8 @@ function comparePriority(first: Robot, second: Robot): number {
 }
 
 function moveOneCell(robot: Robot, tick: number): Robot {
+  if (robot.tasksCompleted >= MAX_TASKS) return { ...robot, state: 'frozen' };
+
   const next = robot.path[0];
   if (!next) return { ...robot, state: 'waiting', idleTime: robot.idleTime + 1 };
 

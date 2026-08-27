@@ -2,6 +2,7 @@ import { aStar, type GridPos } from './astar';
 import {
   advanceTaskAfterArrival,
   cloneRobot,
+  MAX_TASKS,
   metricsAfterTick,
   sameCell,
   taskTarget,
@@ -88,6 +89,10 @@ function prepareRobot(
   shouldPlan: boolean,
   tick: number,
 ): Robot {
+  if (source.tasksCompleted >= MAX_TASKS) {
+    return { ...source, state: 'frozen', path: [] };
+  }
+
   let robot = cloneRobot(source);
   const target = taskTarget(robot);
 
@@ -96,7 +101,7 @@ function prepareRobot(
     robot = advanceTaskAfterArrival(robot, tick);
   }
 
-  if (shouldPlan && robot.path.length === 0) {
+  if (shouldPlan && robot.path.length === 0 && robot.tasksCompleted < MAX_TASKS) {
     // The centralized cloud is intentionally unaware of newly blocked aisles.
     // It keeps dispatching its last known warehouse map; when a robot reaches an
     // injected obstacle, the blocked next waypoint remains in its route and it
@@ -108,6 +113,7 @@ function prepareRobot(
 }
 
 function waitForTurn(robot: Robot, hadConflict: boolean): Robot {
+  if (robot.tasksCompleted >= MAX_TASKS) return { ...robot, state: 'frozen' };
   return {
     ...robot,
     state: 'waiting',
@@ -117,6 +123,8 @@ function waitForTurn(robot: Robot, hadConflict: boolean): Robot {
 }
 
 function moveOneCell(robot: Robot, tick: number): Robot {
+  if (robot.tasksCompleted >= MAX_TASKS) return { ...robot, state: 'frozen' };
+
   const next: GridPos | undefined = robot.path[0];
   if (!next) {
     return { ...robot, state: 'waiting', idleTime: robot.idleTime + 1 };
