@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Robot, SimMetrics, P2PLink } from '../engine/types';
+import { urgencyFor } from '../engine/simulation';
 import {
   PICKUP_STATIONS,
   DROPOFF_STATIONS,
@@ -20,8 +21,8 @@ function makeRobots(): Robot[] {
     task: 'pickup' as const,
     stationIndex: i,
     battery: 100,
-    urgency: Math.random(),
-    timestamp: Date.now(),
+    urgency: urgencyFor(`R${i + 1}`, 0),
+    timestamp: 0,
     state: 'moving' as const,
     conflictsResolved: 0,
     idleTime: 0,
