@@ -24,6 +24,12 @@ interface WarehouseFrame {
   completedTasks: number;
   /** Per-robot tasks completed, indexed 0 = R1, 1 = R2, 2 = R3 */
   robotTaskCounts: number[];
+  /**
+   * Whether each robot (indexed 0 = R1, 1 = R2, 2 = R3) is currently
+   * carrying stock (i.e. on the dropoff leg). Used to drain the source rack
+   * immediately when the robot picks up, not just on delivery completion.
+   */
+  robotCarrying: boolean[];
 }
 
 interface RobotVisual {
@@ -84,8 +90,12 @@ export function PhaserWarehouse({ side }: PhaserWarehouseProps) {
   useEffect(() => {
     // Derive per-robot task counts keyed by stationIndex (0/1/2)
     const robotTaskCounts = [0, 0, 0];
+    const robotCarrying = [false, false, false];
     for (const robot of robots) {
       robotTaskCounts[robot.stationIndex] = robot.tasksCompleted;
+      // A robot on the 'dropoff' leg is actively carrying stock — drain the
+      // source rack immediately rather than waiting for delivery confirmation.
+      robotCarrying[robot.stationIndex] = robot.task === 'dropoff';
     }
 
     sceneRef.current?.sync({
@@ -95,6 +105,7 @@ export function PhaserWarehouse({ side }: PhaserWarehouseProps) {
       isPlaying,
       completedTasks,
       robotTaskCounts,
+      robotCarrying,
     });
   }, [robots, blockedCells, links, isPlaying, completedTasks, side]);
 
@@ -140,6 +151,7 @@ class WarehouseScene extends Phaser.Scene {
   private linkLayer!: Phaser.GameObjects.Graphics;
   private readonly side: Side;
   private lastRobotTaskCounts: number[] = [-1, -1, -1];
+  private lastRobotCarrying: boolean[] = [false, false, false];
 
   constructor(side: Side) {
     super(`warehouse-${side}`);
@@ -326,7 +338,7 @@ class WarehouseScene extends Phaser.Scene {
   }
 
   private renderFrame(frame: WarehouseFrame, animate: boolean) {
-    this.renderStorageInventory(frame.robotTaskCounts);
+    this.renderStorageInventory(frame.robotTaskCounts, frame.robotCarrying);
     this.renderLinks(frame);
     this.renderObstacles(frame.blockedCells);
 
@@ -343,12 +355,17 @@ class WarehouseScene extends Phaser.Scene {
 
   /**
    * Robot i's tasksCompleted drains sourceRacks[i] and fills destRacks[i].
+   * When a robot is actively carrying (on the dropoff leg), the source rack
+   * immediately shows one fewer item — it shouldn't wait until delivery.
    * Completely independent between robots.
    */
-  private renderStorageInventory(robotTaskCounts: number[]) {
-    const changed = robotTaskCounts.some((count, i) => count !== this.lastRobotTaskCounts[i]);
+  private renderStorageInventory(robotTaskCounts: number[], robotCarrying: boolean[]) {
+    const changed =
+      robotTaskCounts.some((count, i) => count !== this.lastRobotTaskCounts[i]) ||
+      robotCarrying.some((carrying, i) => carrying !== this.lastRobotCarrying[i]);
     if (!changed) return;
     this.lastRobotTaskCounts = [...robotTaskCounts];
+    this.lastRobotCarrying = [...robotCarrying];
 
     for (let i = 0; i < 3; i++) {
       const srcRack = this.sourceRacks[i];
@@ -356,11 +373,18 @@ class WarehouseScene extends Phaser.Scene {
       if (!srcRack || !dstRack) continue;
 
       const tasks = robotTaskCounts[i] ?? 0;
+      const carrying = robotCarrying[i] ?? false;
       const cap = srcRack.capacity;
-      const transferred = Math.min(tasks, cap);
 
-      srcRack.setFillLevel((cap - transferred) / cap);
-      dstRack.setFillLevel(transferred / cap);
+      // Items confirmed delivered to dest rack
+      const delivered = Math.min(tasks, cap);
+      // Items currently in-transit (robot is carrying one right now)
+      const inTransit = carrying && tasks + 1 <= cap ? 1 : 0;
+
+      // Source = (total capacity) − (delivered) − (currently being carried)
+      srcRack.setFillLevel((cap - delivered - inTransit) / cap);
+      // Dest fills only on confirmed delivery
+      dstRack.setFillLevel(delivered / cap);
     }
   }
 
@@ -485,4 +509,3 @@ function shelfClusters() {
   }
   return clusters;
 }
-

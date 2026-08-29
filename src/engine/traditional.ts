@@ -1,4 +1,5 @@
-import { aStar, type GridPos } from './astar';
+import { aStar } from './astar';
+import { resolveRobotMoves } from './conflictResolution';
 import {
   advanceTaskAfterArrival,
   cloneRobot,
@@ -44,44 +45,15 @@ export function traditionalTick(
 
   const shouldPlan = tick % Math.max(1, plannerInterval) === 0;
   const planned = side.robots.map((source) => prepareRobot(source, shouldPlan, tick));
-  const yielding = new Set<string>();
-  const blockedByAisle = new Set(
-    planned
-      .filter((robot) => {
-        const next = robot.path[0];
-        return next !== undefined && blockedCells.has(`${next.x},${next.y}`);
-      })
-      .map((robot) => robot.id),
-  );
-  let conflictEvents = 0;
+  const resolved = resolveRobotMoves(planned, {
+    blockedCells,
+    tick,
+    horizon: 1,
+    allowReroute: false,
+    comparePriority: (first, second) => second.id.localeCompare(first.id),
+  });
 
-  for (let left = 0; left < planned.length; left++) {
-    for (let right = left + 1; right < planned.length; right++) {
-      const first = planned[left];
-      const second = planned[right];
-      const firstNext = first.path[0];
-      const secondNext = second.path[0];
-      if (!firstNext || !secondNext) continue;
-
-      const sameDestination = sameCell(firstNext, secondNext);
-      const swappingCells =
-        sameCell(firstNext, second.position) && sameCell(secondNext, first.position);
-      if (!sameDestination && !swappingCells) continue;
-
-      conflictEvents += 1;
-      const winner = first.id.localeCompare(second.id) <= 0 ? first : second;
-      const loser = winner === first ? second : first;
-      yielding.add(loser.id);
-    }
-  }
-
-  const robots = planned.map((robot) =>
-    yielding.has(robot.id) || blockedByAisle.has(robot.id)
-      ? waitForTurn(robot, conflictEvents > 0)
-      : moveOneCell(robot, tick),
-  );
-
-  return { robots, metrics: metricsAfterTick(side.metrics, robots, conflictEvents, tick) };
+  return { robots: resolved.robots, metrics: metricsAfterTick(side.metrics, resolved.robots, resolved.conflictEvents, tick) };
 }
 
 function prepareRobot(
@@ -110,37 +82,4 @@ function prepareRobot(
   }
 
   return robot;
-}
-
-function waitForTurn(robot: Robot, hadConflict: boolean): Robot {
-  if (robot.tasksCompleted >= MAX_TASKS) return { ...robot, state: 'frozen' };
-  return {
-    ...robot,
-    state: 'waiting',
-    idleTime: robot.idleTime + 1,
-    conflictsResolved: robot.conflictsResolved + (hadConflict ? 1 : 0),
-  };
-}
-
-function moveOneCell(robot: Robot, tick: number): Robot {
-  if (robot.tasksCompleted >= MAX_TASKS) return { ...robot, state: 'frozen' };
-
-  const next: GridPos | undefined = robot.path[0];
-  if (!next) {
-    return { ...robot, state: 'waiting', idleTime: robot.idleTime + 1 };
-  }
-
-  let moved: Robot = {
-    ...robot,
-    position: { ...next },
-    path: robot.path.slice(1),
-    state: 'moving',
-    battery: Math.max(0, robot.battery - 0.5),
-  };
-
-  if (sameCell(moved.position, taskTarget(moved))) {
-    moved = advanceTaskAfterArrival(moved, tick);
-  }
-
-  return moved;
 }
