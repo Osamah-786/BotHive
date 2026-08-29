@@ -71,7 +71,12 @@ function prepareRobot(source: Robot, blockedCells: Set<string>, tick: number): R
 
   // Local planning runs every tick, so a new obstacle is propagated immediately.
   if (robot.tasksCompleted < MAX_TASKS && (robot.path.length === 0 || robot.path.some((cell) => blockedCells.has(`${cell.x},${cell.y}`)))) {
-    robot = { ...robot, path: aStar(robot.position, taskTarget(robot), blockedCells) };
+    const newPath = aStar(robot.position, taskTarget(robot), blockedCells);
+    // If no path found, keep the robot waiting in place — don't let it oscillate.
+    if (newPath.length === 0 && !sameCell(robot.position, taskTarget(robot))) {
+      return { ...robot, path: [], state: 'waiting' };
+    }
+    robot = { ...robot, path: newPath };
   }
   return robot;
 }

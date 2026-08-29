@@ -197,6 +197,14 @@ function buildMoveCandidates(
   };
 
   const primary = robot.path[0];
+
+  // If there is no planned path and the robot isn't at its target, it is
+  // completely blocked (A* found no route). Only offer staying in place so
+  // the cooperative solver doesn't score random neighbor moves and cause jitter.
+  if (!primary && !sameCell(robot.position, target)) {
+    return [{ position: { ...robot.position }, route: [], score: -1 }];
+  }
+
   if (primary && isPassable(primary.x, primary.y, blockedCells)) {
     addCandidate(primary, usableRoute(robot.path, blockedCells));
   }

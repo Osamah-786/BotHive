@@ -15,11 +15,18 @@ export interface AMRController {
     destroy(): void;
 }
 
+export interface AMRTheme {
+    body: number;
+    dark: number;
+    light: number;
+}
+
 export function createAMR(
     scene: Phaser.Scene,
     x: number,
     y: number,
-    initialCarrying = false
+    initialCarrying = false,
+    theme?: AMRTheme
 ): AMRController {
 
     const container = scene.add.container(x, y);
@@ -33,9 +40,9 @@ export function createAMR(
      * =========================================================
      */
 
-    const BODY = 0x55b94d;
-    const BODY_DARK = 0x318b38;
-    const BODY_LIGHT = 0x7ed66e;
+    const BODY = theme ? theme.body : 0x55b94d;
+    const BODY_DARK = theme ? theme.dark : 0x318b38;
+    const BODY_LIGHT = theme ? theme.light : 0x7ed66e;
 
     const BLACK = 0x202020;
     const DARK = 0x111111;

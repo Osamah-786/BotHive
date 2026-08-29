@@ -133,7 +133,13 @@ const STATION_ROWS = [2, 7, 11] as const; // matches P1/D1, P2/D2, P3/D3
 const SRC_RACK_COL = 0;
 const DST_RACK_COL = 17;
 
-const ROBOT_ACCENT_COLORS = [0x3b82f6, 0x22c55e, 0xeab308] as const;
+const ROBOT_THEMES = [
+  { body: 0x3b82f6, dark: 0x1d4ed8, light: 0x93c5fd },
+  { body: 0x22c55e, dark: 0x15803d, light: 0x86efac },
+  { body: 0xeab308, dark: 0xa16207, light: 0xfde047 },
+] as const;
+
+const ROBOT_ACCENT_COLORS = [ROBOT_THEMES[0].body, ROBOT_THEMES[1].body, ROBOT_THEMES[2].body] as const;
 const ROBOT_LABELS = ['R1', 'R2', 'R3'] as const;
 
 class WarehouseScene extends Phaser.Scene {
@@ -393,7 +399,8 @@ class WarehouseScene extends Phaser.Scene {
     let visual = this.robots.get(robot.id);
     const carrying = robot.task === 'dropoff';
     if (!visual) {
-      const controller = createAMR(this, target.x - 46, target.y + 25, carrying);
+      const theme = ROBOT_THEMES[robot.stationIndex] || ROBOT_THEMES[0];
+      const controller = createAMR(this, target.x - 46, target.y + 25, carrying, theme);
       controller.container.setScale(0.42).setDepth(55);
       const state = this.add.circle(target.x, target.y, 35).setStrokeStyle(3, 0xf2c14e, 0.75).setDepth(50);
       const label = this.add
@@ -432,8 +439,9 @@ class WarehouseScene extends Phaser.Scene {
 
     const frozen = robot.state === 'frozen';
     const waiting = robot.state === 'waiting';
+    const themeBody = ROBOT_THEMES[robot.stationIndex]?.body || MESH;
     visual.state.setStrokeStyle(3, frozen ? CLOUD : carrying ? 0xf28f3b : 0xf2c14e, frozen ? 1 : waiting ? 0.45 : 0.75);
-    visual.state.setFillStyle(frozen ? CLOUD : MESH, frozen ? 0.2 : 0.04);
+    visual.state.setFillStyle(frozen ? CLOUD : themeBody, frozen ? 0.2 : 0.04);
     visual.label.setText(`${robot.id}  ${Math.round(robot.battery)}%${frozen ? '  LOST' : waiting ? '  HOLD' : ''}`);
     visual.label.setColor(frozen ? '#ffc2c2' : robot.battery < 25 ? '#f2c14e' : '#e5f3ee');
     visual.lastPosition = robot.position;
@@ -467,9 +475,10 @@ class WarehouseScene extends Phaser.Scene {
       if (!from || !to) continue;
       const start = cellCenter(from.position);
       const end = cellCenter(to.position);
-      this.linkLayer.lineStyle(9, MESH, 0.12 * pulse);
+      const themeColor = ROBOT_THEMES[from.stationIndex]?.body || MESH;
+      this.linkLayer.lineStyle(9, themeColor, 0.12 * pulse);
       this.linkLayer.lineBetween(start.x, start.y, end.x, end.y);
-      this.linkLayer.lineStyle(2, MESH, pulse);
+      this.linkLayer.lineStyle(2, themeColor, pulse);
       this.linkLayer.lineBetween(start.x, start.y, end.x, end.y);
     }
   }
