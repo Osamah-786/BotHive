@@ -7,6 +7,9 @@ import {
   metricsAfterTick,
   sameCell,
   taskTarget,
+  applyKillState,
+  applyTaskInheritance,
+  applyCargoHandoffCleanup,
 } from './simulation';
 import type { EngineResult } from './simulation';
 import type { P2PLink, ProposedSideState, Robot } from './types';
@@ -85,22 +88,7 @@ export function proposedTick(
   let resolved = side.robots.map((r) => resolvedMap.get(r.id) ?? r);
 
   // ── Step 6: Cargo handoff cleanup ─────────────────────────────────────────
-  // If a coverer was rescuing stranded cargo, the moment it picks it up 
-  // (rescueFromPosition clears), the killed robot must drop its cargo state
-  // (switch to 'pickup') so we don't have duplicated stock.
-  const activeCoverers = new Map(
-    resolved.filter((r) => r.coveringForRobotId).map((r) => [r.coveringForRobotId!, r]),
-  );
-  resolved = resolved.map((robot) => {
-    if (robot.state === 'killed' && robot.task === 'dropoff') {
-      const coverer = activeCoverers.get(robot.id);
-      // If a coverer exists and is no longer in rescue transit, the cargo is transferred!
-      if (coverer && !coverer.rescueFromPosition) {
-        return { ...robot, task: 'pickup' };
-      }
-    }
-    return robot;
-  });
+  resolved = applyCargoHandoffCleanup(resolved);
 
   const conflictEvents = findConflictingPairs(activePlanned, 3, blockedCells).length;
 
@@ -111,98 +99,6 @@ export function proposedTick(
   };
 }
 
-/**
- * Applies permanent kill state. Once a robot is in killedRobots it stays
- * killed for the duration of the session. Only Restart can clear it.
- * Task progress is always preserved so the covering robot inherits correctly.
- */
-function applyKillState(robots: Robot[], killedRobots: Set<string>): Robot[] {
-  return robots.map((robot) => {
-    if (!killedRobots.has(robot.id)) return robot;
-    // Newly killed: freeze in place, preserve task progress, clear path.
-    // Already killed: just ensure state is right (idempotent).
-    if (robot.state !== 'killed') {
-      return { ...cloneRobot(robot), state: 'killed', path: [] };
-    }
-    return { ...robot, state: 'killed', path: [] };
-  });
-}
-
-/**
- * Task inheritance: P2P self-healing.
- *
- * When a robot is killed, the first robot in the fleet that has completed
- * ALL of its own tasks (MAX_TASKS) and isn't already covering will inherit
- * the killed robot's station assignment and remaining work.
- *
- * Cargo-aware handoff:
- * - Killed on the PICKUP leg (no stock yet) → coverer goes straight to the
- *   pickup station as usual.
- * - Killed on the DROPOFF leg (carrying stock) → coverer first navigates to
- *   the death position to "collect" the stranded cargo (rescueFromPosition),
- *   then delivers to the dropoff station, then resumes normal cycles.
- */
-function applyTaskInheritance(robots: Robot[], killedRobots: Set<string>): Robot[] {
-  // Find killed robots whose tasks haven't all been completed
-  const killedWithWork = robots.filter(
-    (r) => killedRobots.has(r.id) && r.tasksCompleted < MAX_TASKS,
-  );
-
-  if (killedWithWork.length === 0) return robots;
-
-  // Find the killed robot IDs that are already being covered by someone
-  const alreadyCovered = new Set(
-    robots.filter((r) => r.coveringForRobotId !== undefined).map((r) => r.coveringForRobotId!),
-  );
-
-  // Robots that have finished their own tasks and aren't covering yet
-  const eligibleCoverers = robots.filter(
-    (r) =>
-      !killedRobots.has(r.id) &&
-      r.tasksCompleted >= MAX_TASKS &&
-      r.coveringForRobotId === undefined,
-  );
-
-  if (eligibleCoverers.length === 0) return robots;
-
-  // Pair each uncovered killed robot with an eligible coverer (greedy)
-  const result = robots.map((r) => ({ ...r }));
-  const uncoveredKilled = killedWithWork.filter((kr) => !alreadyCovered.has(kr.id));
-
-  for (const killedRobot of uncoveredKilled) {
-    if (eligibleCoverers.length === 0) break;
-    const coverer = eligibleCoverers.shift()!;
-
-    const covererIndex = result.findIndex((r) => r.id === coverer.id);
-    if (covererIndex === -1) continue;
-
-    const wasCarryingStock = killedRobot.task === 'dropoff';
-
-    result[covererIndex] = {
-      ...result[covererIndex],
-      stationIndex: killedRobot.stationIndex,
-      tasksCompleted: killedRobot.tasksCompleted,
-      coveringForRobotId: killedRobot.id,
-      path: [],
-      state: 'moving',
-
-      // ── Cargo-aware handoff ──────────────────────────────────────────────
-      // If the killed robot was carrying stock (on the dropoff leg), the coverer
-      // must first travel to the death position to "collect" the stranded cargo.
-      // task stays 'pickup' so advanceTaskAfterArrival won't count a phantom
-      // delivery; once the coverer arrives, it transitions to 'dropoff' naturally.
-      //
-      // If the killed robot had no stock yet (on the pickup leg), just inherit
-      // the task directly — coverer heads to the pickup station as normal.
-      task: wasCarryingStock ? 'pickup' : killedRobot.task,
-      rescueFromPosition: wasCarryingStock
-        ? { x: killedRobot.position.x, y: killedRobot.position.y }
-        : undefined,
-    };
-  }
-
-  return result;
-}
 
 function prepareRobot(source: Robot, blockedCells: Set<string>, tick: number): Robot {
   // Killed robots are frozen — no path planning, no movement.
@@ -241,6 +137,12 @@ function prepareRobot(source: Robot, blockedCells: Set<string>, tick: number): R
     }
     robot = { ...robot, path: newPath };
   }
+
+  // If a coverer finishes all tasks, clear its coverage so it can cover another
+  if (robot.tasksCompleted >= MAX_TASKS && robot.coveringForRobotId !== undefined) {
+    robot = { ...robot, coveringForRobotId: undefined };
+  }
+
   return robot;
 }
 

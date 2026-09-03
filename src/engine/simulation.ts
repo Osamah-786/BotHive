@@ -95,3 +95,108 @@ export function metricsAfterTick(
 
   return { totalTasksCompleted, totalIdleTime, conflictCount, history: nextHistory };
 }
+
+/**
+ * Applies permanent kill state. Once a robot is in killedRobots it stays
+ * killed for the duration of the session. Only Restart can clear it.
+ * Task progress is always preserved so the covering robot inherits correctly.
+ */
+export function applyKillState(robots: Robot[], killedRobots: Set<string>): Robot[] {
+  return robots.map((robot) => {
+    if (!killedRobots.has(robot.id)) return robot;
+    // Newly killed: freeze in place, preserve task progress, clear path.
+    // Already killed: just ensure state is right (idempotent).
+    if (robot.state !== 'killed') {
+      return { ...cloneRobot(robot), state: 'killed', path: [] };
+    }
+    return { ...robot, state: 'killed', path: [] };
+  });
+}
+
+/**
+ * Task inheritance: self-healing fallback.
+ *
+ * When a robot is killed, the first robot in the fleet that has completed
+ * ALL of its own tasks (MAX_TASKS) and isn't already covering will inherit
+ * the killed robot's station assignment and remaining work.
+ *
+ * Cargo-aware handoff:
+ * - Killed on the PICKUP leg (no stock yet) → coverer goes straight to the
+ *   pickup station as usual.
+ * - Killed on the DROPOFF leg (carrying stock) → coverer first navigates to
+ *   the death position to "collect" the stranded cargo (rescueFromPosition),
+ *   then delivers to the dropoff station, then resumes normal cycles.
+ */
+export function applyTaskInheritance(robots: Robot[], killedRobots: Set<string>): Robot[] {
+  const killedWithWork = robots.filter((r) => killedRobots.has(r.id) && r.tasksCompleted < MAX_TASKS);
+  if (killedWithWork.length === 0) return robots;
+
+  const alreadyCovered = new Set(
+    robots.filter((r) => r.coveringForRobotId !== undefined).map((r) => r.coveringForRobotId!),
+  );
+
+  const eligibleCoverers = robots.filter(
+    (r) => !killedRobots.has(r.id) && r.tasksCompleted >= MAX_TASKS && r.coveringForRobotId === undefined,
+  );
+
+  if (eligibleCoverers.length === 0) return robots;
+
+  const result = robots.map((r) => ({ ...r }));
+  const uncoveredKilled = killedWithWork.filter((kr) => !alreadyCovered.has(kr.id));
+
+  for (const killedRobot of uncoveredKilled) {
+    if (eligibleCoverers.length === 0) break;
+    const coverer = eligibleCoverers.shift()!;
+
+    const covererIndex = result.findIndex((r) => r.id === coverer.id);
+    if (covererIndex === -1) continue;
+
+    const wasCarryingStock = killedRobot.task === 'dropoff';
+
+    result[covererIndex] = {
+      ...result[covererIndex],
+      stationIndex: killedRobot.stationIndex,
+      tasksCompleted: killedRobot.tasksCompleted,
+      coveringForRobotId: killedRobot.id,
+      path: [],
+      state: 'moving',
+      task: wasCarryingStock ? 'pickup' : killedRobot.task,
+      rescueFromPosition: wasCarryingStock
+        ? { x: killedRobot.position.x, y: killedRobot.position.y }
+        : undefined,
+    };
+  }
+
+  return result;
+}
+
+/**
+ * Sync covered robots.
+ * 1. Cargo handoff: If a coverer picks up stranded cargo, update the killed robot to 'pickup'.
+ * 2. Progress sync: Keep the killed robot's tasksCompleted in sync with the coverer.
+ *    This ensures that if the coverer finishes and moves on to cover a THIRD robot,
+ *    the first killed robot's rack remains visually completed.
+ */
+export function applyCargoHandoffCleanup(robots: Robot[]): Robot[] {
+  const activeCoverers = new Map(
+    robots.filter((r) => r.coveringForRobotId).map((r) => [r.coveringForRobotId!, r]),
+  );
+  return robots.map((robot) => {
+    if (robot.state === 'killed') {
+      const coverer = activeCoverers.get(robot.id);
+      if (coverer) {
+        let updated = robot;
+        // Sync progress back so it persists if the coverer leaves
+        if (coverer.tasksCompleted > robot.tasksCompleted) {
+          updated = { ...updated, tasksCompleted: coverer.tasksCompleted };
+        }
+        // Cargo handoff
+        if (robot.task === 'dropoff' && !coverer.rescueFromPosition) {
+          updated = { ...updated, task: 'pickup' };
+        }
+        return updated;
+      }
+    }
+    return robot;
+  });
+}

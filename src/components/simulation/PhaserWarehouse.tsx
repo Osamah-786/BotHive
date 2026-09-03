@@ -115,11 +115,11 @@ export function PhaserWarehouse({ side }: PhaserWarehouseProps) {
       const isCarrying = robot.task === 'dropoff' && !robot.rescueFromPosition;
       robotCarrying[robot.stationIndex] = robotCarrying[robot.stationIndex] || isCarrying;
 
-      // If this robot is covering for a killed peer, its OWN original rack
-      // (indexed by its ID, e.g. R3 → index 2) is fully done and should not
-      // reset. Pin it at MAX_TASKS so source shows empty and dest shows full.
-      if (robot.coveringForRobotId !== undefined) {
-        const originalIndex = Number(robot.id.slice(1)) - 1; // R1→0, R2→1, R3→2
+      // If a robot is working on a rack other than its original one, it means
+      // it fully completed its own tasks and is now covering for a killed peer
+      // (possibly its second or third peer). Pin its own rack at MAX_TASKS.
+      const originalIndex = Number(robot.id.slice(1)) - 1; // R1→0, R2→1, R3→2
+      if (robot.stationIndex !== originalIndex) {
         robotTaskCounts[originalIndex] = MAX_TASKS_COUNT;
         robotCarrying[originalIndex] = false;
       }

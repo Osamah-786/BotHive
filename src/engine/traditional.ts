@@ -7,6 +7,9 @@ import {
   metricsAfterTick,
   sameCell,
   taskTarget,
+  applyKillState,
+  applyTaskInheritance,
+  applyCargoHandoffCleanup,
 } from './simulation';
 import type { EngineResult } from './simulation';
 import type { Robot, SideState } from './types';
@@ -25,10 +28,6 @@ export interface TraditionalTickOptions {
  *
  * Static robot-ID priority deliberately models the basic stop-and-wait policy:
  * R1 always wins over R2, which always wins over R3.
- *
- * When a robot is individually killed, the cloud model cannot self-heal:
- * the dead robot stays frozen and its tasks are abandoned (cloud doesn't
- * redistribute work), contrasting starkly with the P2P model's behaviour.
  */
 export function traditionalTick(
   side: SideState,
@@ -49,32 +48,47 @@ export function traditionalTick(
     return { robots, metrics: metricsAfterTick(side.metrics, robots, 0, tick) };
   }
 
-  const shouldPlan = tick % Math.max(1, plannerInterval) === 0;
-  const planned = side.robots.map((source) => prepareRobot(source, shouldPlan, tick, killedRobots));
-  const resolved = resolveRobotMoves(planned, {
-    blockedCells,
-    tick,
-    horizon: 1,
-    allowReroute: false,
-    comparePriority: (first, second) => second.id.localeCompare(first.id),
-  });
+  const withKillState = applyKillState(side.robots, killedRobots);
+  const withInheritance = applyTaskInheritance(withKillState, killedRobots);
 
-  return { robots: resolved.robots, metrics: metricsAfterTick(side.metrics, resolved.robots, resolved.conflictEvents, tick) };
+  const shouldPlan = tick % Math.max(1, plannerInterval) === 0;
+  
+  // Separate out killed from active
+  const activeInheritance = withInheritance.filter((r) => r.state !== 'killed');
+  const killedPlanned = withInheritance.filter((r) => r.state === 'killed');
+  
+  const planned = activeInheritance.map((source) => prepareRobot(source, shouldPlan, tick));
+  
+  let resolvedActive = planned;
+  let conflictEvents = 0;
+  if (planned.length > 0) {
+    const resolution = resolveRobotMoves(planned, {
+      blockedCells,
+      tick,
+      horizon: 1,
+      allowReroute: false,
+      comparePriority: (first, second) => second.id.localeCompare(first.id),
+    });
+    resolvedActive = resolution.robots;
+    conflictEvents = resolution.conflictEvents;
+  }
+
+  // Merge killed robots back
+  const resolvedMap = new Map(resolvedActive.map((r) => [r.id, r]));
+  for (const kr of killedPlanned) resolvedMap.set(kr.id, kr);
+  let resolved = side.robots.map((r) => resolvedMap.get(r.id) ?? r);
+
+  resolved = applyCargoHandoffCleanup(resolved);
+
+  return { robots: resolved, metrics: metricsAfterTick(side.metrics, resolved, conflictEvents, tick) };
 }
 
 function prepareRobot(
   source: Robot,
   shouldPlan: boolean,
   tick: number,
-  killedRobots: Set<string>,
 ): Robot {
-  // A killed robot stays frozen — the centralized cloud cannot detect or
-  // redistribute its work. This is the critical contrast with the P2P model.
-  if (killedRobots.has(source.id)) {
-    return { ...cloneRobot(source), state: 'killed', path: [] };
-  }
-
-  if (source.tasksCompleted >= MAX_TASKS) {
+  if (source.tasksCompleted >= MAX_TASKS && source.coveringForRobotId === undefined) {
     return { ...source, state: 'frozen', path: [] };
   }
 
@@ -83,7 +97,11 @@ function prepareRobot(
 
   // At a station, immediately assign the next leg of the pickup → dropoff cycle.
   if (sameCell(robot.position, target) && robot.path.length === 0) {
-    robot = advanceTaskAfterArrival(robot, tick);
+    if (robot.rescueFromPosition) {
+      robot = { ...robot, task: 'dropoff', rescueFromPosition: undefined };
+    } else {
+      robot = advanceTaskAfterArrival(robot, tick);
+    }
   }
 
   if (shouldPlan && robot.path.length === 0 && robot.tasksCompleted < MAX_TASKS) {
@@ -92,6 +110,11 @@ function prepareRobot(
     // injected obstacle, the blocked next waypoint remains in its route and it
     // waits there until the aisle is cleared instead of locally rerouting.
     robot = { ...robot, path: aStar(robot.position, taskTarget(robot)) };
+  }
+
+  // If a coverer finishes all tasks, clear its coverage so it can cover another
+  if (robot.tasksCompleted >= MAX_TASKS && robot.coveringForRobotId !== undefined) {
+    robot = { ...robot, coveringForRobotId: undefined };
   }
 
   return robot;
