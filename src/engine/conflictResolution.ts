@@ -85,7 +85,7 @@ export function resolveRobotMoves(
   );
 
   for (const robot of priorityOrder) {
-    if (robot.tasksCompleted >= MAX_TASKS) {
+    if (robot.tasksCompleted >= MAX_TASKS && !robot.coveringForRobotId) {
       reservations.push({ robotId: robot.id, trajectory: holdTrajectory(robot.position, horizon) });
       resolvedById.set(robot.id, { ...robot, state: 'frozen', path: [] });
       continue;
@@ -140,7 +140,7 @@ function resolveCooperativeMoves(
   const selected = chooseJointMoves(robots, candidates);
 
   const resolved = robots.map((robot, index) => {
-    if (robot.tasksCompleted >= MAX_TASKS) return { ...robot, state: 'frozen' as const, path: [] };
+    if (robot.tasksCompleted >= MAX_TASKS && !robot.coveringForRobotId) return { ...robot, state: 'frozen' as const, path: [] };
     const candidate = selected[index];
     if (!candidate || sameCell(candidate.position, robot.position)) {
       return waitRobot(robot, conflictParticipants.has(robot.id));
@@ -160,7 +160,7 @@ function buildMoveCandidates(
   blockedCells: Set<string>,
   priorityWeight: number,
 ): MoveCandidate[] {
-  if (robot.tasksCompleted >= MAX_TASKS) {
+  if (robot.tasksCompleted >= MAX_TASKS && !robot.coveringForRobotId) {
     return [{ position: { ...robot.position }, route: [], score: 0 }];
   }
 
@@ -372,7 +372,20 @@ function advanceRobot(
     state: 'moving',
     battery: Math.max(0, robot.battery - 0.5),
   };
-  if (sameCell(moved.position, taskTarget(moved))) moved = advanceTaskAfterArrival(moved, tick);
+
+  if (sameCell(moved.position, taskTarget(moved))) {
+    if (moved.rescueFromPosition) {
+      // ── Rescue pickup: arrived at the death position ───────────────────
+      // This is NOT a completed task — the coverer is merely picking up the
+      // stranded cargo the killed robot was carrying. Switch to dropoff mode
+      // and clear the rescue waypoint immediately so the next A* call targets
+      // the real dropoff station. DO NOT call advanceTaskAfterArrival (that
+      // would phantom-increment tasksCompleted).
+      moved = { ...moved, task: 'dropoff', rescueFromPosition: undefined, path: [] };
+    } else {
+      moved = advanceTaskAfterArrival(moved, tick);
+    }
+  }
   return moved;
 }
 

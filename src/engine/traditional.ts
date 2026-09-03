@@ -15,6 +15,7 @@ export interface TraditionalTickOptions {
   tick: number;
   blockedCells?: Set<string>;
   cloudKilled?: boolean;
+  killedRobots?: Set<string>;
   /** The centralized planner only refreshes routes on these tick boundaries. */
   plannerInterval?: number;
 }
@@ -24,6 +25,10 @@ export interface TraditionalTickOptions {
  *
  * Static robot-ID priority deliberately models the basic stop-and-wait policy:
  * R1 always wins over R2, which always wins over R3.
+ *
+ * When a robot is individually killed, the cloud model cannot self-heal:
+ * the dead robot stays frozen and its tasks are abandoned (cloud doesn't
+ * redistribute work), contrasting starkly with the P2P model's behaviour.
  */
 export function traditionalTick(
   side: SideState,
@@ -31,6 +36,7 @@ export function traditionalTick(
     tick,
     blockedCells = new Set<string>(),
     cloudKilled = false,
+    killedRobots = new Set<string>(),
     plannerInterval = 1,
   }: TraditionalTickOptions,
 ): EngineResult {
@@ -44,7 +50,7 @@ export function traditionalTick(
   }
 
   const shouldPlan = tick % Math.max(1, plannerInterval) === 0;
-  const planned = side.robots.map((source) => prepareRobot(source, shouldPlan, tick));
+  const planned = side.robots.map((source) => prepareRobot(source, shouldPlan, tick, killedRobots));
   const resolved = resolveRobotMoves(planned, {
     blockedCells,
     tick,
@@ -60,7 +66,14 @@ function prepareRobot(
   source: Robot,
   shouldPlan: boolean,
   tick: number,
+  killedRobots: Set<string>,
 ): Robot {
+  // A killed robot stays frozen — the centralized cloud cannot detect or
+  // redistribute its work. This is the critical contrast with the P2P model.
+  if (killedRobots.has(source.id)) {
+    return { ...cloneRobot(source), state: 'killed', path: [] };
+  }
+
   if (source.tasksCompleted >= MAX_TASKS) {
     return { ...source, state: 'frozen', path: [] };
   }

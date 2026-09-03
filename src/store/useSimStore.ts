@@ -51,6 +51,8 @@ export interface SimStore {
   cloudKilled: boolean;
   blockedCells: Set<string>;   // "x,y" keys
   latencyMs: number;           // 20 – 2000
+  /** Set of robot IDs that have been manually killed (hardware failure scenario). */
+  killedRobots: Set<string>;
 
   // ── Simulation sides ────────────────────────────────────────────────────────
   traditional: {
@@ -74,6 +76,9 @@ export interface SimStore {
   toggleBlockCell: (x: number, y: number) => void;
   setLatency: (ms: number) => void;
 
+  /** Kill a specific robot by ID (permanent hardware failure — only Restart resets). */
+  killRobot: (id: string) => void;
+
   /** Called each engine tick to advance the tick counter */
   setTick: (t: number) => void;
 
@@ -95,6 +100,7 @@ export const useSimStore = create<SimStore>((set) => ({
   cloudKilled: false,
   blockedCells: new Set<string>(),
   latencyMs: 200,
+  killedRobots: new Set<string>(),
 
   // ── Initial side states ─────────────────────────────────────────────────────
   traditional: {
@@ -118,6 +124,7 @@ export const useSimStore = create<SimStore>((set) => ({
       cloudKilled: false,
       blockedCells: new Set<string>(),
       latencyMs: 200,
+      killedRobots: new Set<string>(),
       traditional: { robots: makeRobots(), metrics: makeMetrics() },
       proposed:    { robots: makeRobots(), metrics: makeMetrics(), p2pLinks: [] },
     }),
@@ -137,6 +144,13 @@ export const useSimStore = create<SimStore>((set) => ({
     }),
 
   setLatency: (ms) => set({ latencyMs: ms }),
+
+  killRobot: (id) =>
+    set((state) => {
+      const next = new Set(state.killedRobots);
+      next.add(id);
+      return { killedRobots: next };
+    }),
 
   setTick: (t) => set({ tick: t }),
 

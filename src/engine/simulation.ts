@@ -19,6 +19,9 @@ export function sameCell(a: GridPos, b: GridPos): boolean {
 }
 
 export function taskTarget(robot: Robot): GridPos {
+  // A robot in rescue mode must first reach the death position of the killed
+  // robot to "pick up" the stranded cargo before heading to the dropoff station.
+  if (robot.rescueFromPosition) return robot.rescueFromPosition;
   const stations = robot.task === 'pickup' ? PICKUP_STATIONS : DROPOFF_STATIONS;
   return stations[robot.stationIndex];
 }

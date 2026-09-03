@@ -12,7 +12,7 @@ export interface Cell {
 
 // ─── Robot ────────────────────────────────────────────────────────────────────
 
-export type RobotState = 'moving' | 'waiting' | 'frozen';
+export type RobotState = 'moving' | 'waiting' | 'frozen' | 'killed';
 export type RobotTask = 'pickup' | 'dropoff';
 
 export interface Robot {
@@ -54,6 +54,21 @@ export interface Robot {
 
   /** Total pick→drop cycles completed */
   tasksCompleted: number;
+
+  /**
+   * If this robot is currently covering for a killed robot, this is the
+   * killed robot's ID. Otherwise undefined. Used to track task inheritance.
+   */
+  coveringForRobotId?: string;
+
+  /**
+   * When a robot is killed mid-dropoff (carrying cargo), the covering robot
+   * must first navigate to the death position to "pick up" the stranded stock
+   * before heading to the dropoff station.
+   * This field holds that intermediate rescue waypoint.
+   * Cleared automatically once the robot arrives and transitions to 'dropoff'.
+   */
+  rescueFromPosition?: { x: number; y: number };
 }
 
 // ─── Metrics ──────────────────────────────────────────────────────────────────

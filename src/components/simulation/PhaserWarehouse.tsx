@@ -12,6 +12,7 @@ const CELL = 100;
 const WORLD_WIDTH = GRID_COLS * CELL;
 const WORLD_HEIGHT = GRID_ROWS * CELL;
 const CLOUD = 0xf15b5b;
+const KILLED = 0xff4040;
 const MESH = 0x51d38d;
 
 type Side = 'traditional' | 'proposed';
@@ -36,6 +37,7 @@ interface RobotVisual {
   controller: AMRController;
   label: Phaser.GameObjects.Text;
   state: Phaser.GameObjects.Arc;
+  killedOverlay: Phaser.GameObjects.Graphics;
   lastPosition: { x: number; y: number };
   carrying: boolean;
 }
@@ -88,14 +90,39 @@ export function PhaserWarehouse({ side }: PhaserWarehouseProps) {
   }, [side]);
 
   useEffect(() => {
-    // Derive per-robot task counts keyed by stationIndex (0/1/2)
+    // Derive per-rack task counts and carrying flags.
+    //
+    // Rack i maps to the station originally owned by robot R(i+1).
+    // A covering robot has a different stationIndex than its robot number,
+    // so we must handle two cases separately:
+    //   1. The rack the robot is *currently working* (robot.stationIndex)
+    //   2. The covering robot's *own* rack (originalIndex from robot.id)
+    //      → must stay pinned at MAX_TASKS (done), not reset to 0.
+    const MAX_TASKS_COUNT = 6; // mirrors MAX_TASKS from simulation.ts
     const robotTaskCounts = [0, 0, 0];
     const robotCarrying = [false, false, false];
+
     for (const robot of robots) {
-      robotTaskCounts[robot.stationIndex] = robot.tasksCompleted;
-      // A robot on the 'dropoff' leg is actively carrying stock — drain the
-      // source rack immediately rather than waiting for delivery confirmation.
-      robotCarrying[robot.stationIndex] = robot.task === 'dropoff';
+      // Update the rack this robot is actively working on this tick.
+      // Use Math.max so a coverer (inheriting tasks) or dead robot doesn't overwrite progress.
+      robotTaskCounts[robot.stationIndex] = Math.max(
+        robotTaskCounts[robot.stationIndex],
+        robot.tasksCompleted
+      );
+
+      // An item is in-transit if ANY robot assigned to this rack is physically carrying it.
+      // (A dead robot holds it until the coverer completes the rescue transit)
+      const isCarrying = robot.task === 'dropoff' && !robot.rescueFromPosition;
+      robotCarrying[robot.stationIndex] = robotCarrying[robot.stationIndex] || isCarrying;
+
+      // If this robot is covering for a killed peer, its OWN original rack
+      // (indexed by its ID, e.g. R3 → index 2) is fully done and should not
+      // reset. Pin it at MAX_TASKS so source shows empty and dest shows full.
+      if (robot.coveringForRobotId !== undefined) {
+        const originalIndex = Number(robot.id.slice(1)) - 1; // R1→0, R2→1, R3→2
+        robotTaskCounts[originalIndex] = MAX_TASKS_COUNT;
+        robotCarrying[originalIndex] = false;
+      }
     }
 
     sceneRef.current?.sync({
@@ -353,6 +380,7 @@ class WarehouseScene extends Phaser.Scene {
       if (!present.has(id)) {
         visual.controller.destroy();
         visual.state.destroy();
+        visual.killedOverlay.destroy();
         this.robots.delete(id);
       }
     }
@@ -397,12 +425,18 @@ class WarehouseScene extends Phaser.Scene {
   private renderRobot(robot: Robot, animate: boolean) {
     const target = cellCenter(robot.position);
     let visual = this.robots.get(robot.id);
-    const carrying = robot.task === 'dropoff';
+    // In rescue mode the robot is heading to the death position — not carrying yet.
+    const carrying = robot.task === 'dropoff' && !robot.rescueFromPosition;
     if (!visual) {
       const theme = ROBOT_THEMES[robot.stationIndex] || ROBOT_THEMES[0];
       const controller = createAMR(this, target.x - 46, target.y + 25, carrying, theme);
       controller.container.setScale(0.42).setDepth(55);
       const state = this.add.circle(target.x, target.y, 35).setStrokeStyle(3, 0xf2c14e, 0.75).setDepth(50);
+
+      // ── Killed overlay: an X drawn with two diagonal lines + tinted fill ──
+      const killedOverlay = this.add.graphics().setDepth(65);
+      killedOverlay.setVisible(false);
+
       const label = this.add
         .text(target.x, target.y + 51, '', {
           fontFamily: 'monospace',
@@ -414,7 +448,7 @@ class WarehouseScene extends Phaser.Scene {
         })
         .setOrigin(0.5)
         .setDepth(60);
-      visual = { controller, label, state, lastPosition: robot.position, carrying };
+      visual = { controller, label, state, killedOverlay, lastPosition: robot.position, carrying };
       this.robots.set(robot.id, visual);
     }
 
@@ -423,10 +457,15 @@ class WarehouseScene extends Phaser.Scene {
       visual.carrying = carrying;
     }
 
+    const killed = robot.state === 'killed';
+    const frozen = robot.state === 'frozen';
+    const waiting = robot.state === 'waiting';
+
     const duration = animate ? 170 : 0;
     this.tweens.killTweensOf(visual.controller.container);
     this.tweens.killTweensOf(visual.state);
     this.tweens.killTweensOf(visual.label);
+    this.tweens.killTweensOf(visual.killedOverlay);
     if (duration) {
       visual.controller.moveTo(target.x - 46, target.y + 25, duration);
       this.tweens.add({ targets: visual.state, x: target.x, y: target.y, duration, ease: 'Sine.easeOut' });
@@ -437,13 +476,61 @@ class WarehouseScene extends Phaser.Scene {
       visual.label.setPosition(target.x, target.y + 51);
     }
 
-    const frozen = robot.state === 'frozen';
-    const waiting = robot.state === 'waiting';
+    // ── State ring & body tint ─────────────────────────────────────────────
     const themeBody = ROBOT_THEMES[robot.stationIndex]?.body || MESH;
-    visual.state.setStrokeStyle(3, frozen ? CLOUD : carrying ? 0xf28f3b : 0xf2c14e, frozen ? 1 : waiting ? 0.45 : 0.75);
-    visual.state.setFillStyle(frozen ? CLOUD : themeBody, frozen ? 0.2 : 0.04);
-    visual.label.setText(`${robot.id}  ${Math.round(robot.battery)}%${frozen ? '  LOST' : waiting ? '  HOLD' : ''}`);
-    visual.label.setColor(frozen ? '#ffc2c2' : robot.battery < 25 ? '#f2c14e' : '#e5f3ee');
+    if (killed) {
+      visual.state.setStrokeStyle(3, KILLED, 0.9);
+      visual.state.setFillStyle(KILLED, 0.18);
+    } else if (frozen) {
+      visual.state.setStrokeStyle(3, CLOUD, 1);
+      visual.state.setFillStyle(CLOUD, 0.2);
+    } else {
+      visual.state.setStrokeStyle(3, carrying ? 0xf28f3b : 0xf2c14e, waiting ? 0.45 : 0.75);
+      visual.state.setFillStyle(themeBody, 0.04);
+    }
+
+    // ── Killed X overlay ──────────────────────────────────────────────────
+    if (killed) {
+      visual.killedOverlay.setVisible(true);
+      visual.killedOverlay.clear();
+      const ox = target.x;
+      const oy = target.y;
+      const r = 20;
+      // Dark tinted circle behind the X
+      visual.killedOverlay.fillStyle(0x1a0505, 0.55);
+      visual.killedOverlay.fillCircle(ox, oy, r + 4);
+      // Bold X strokes
+      visual.killedOverlay.lineStyle(5, KILLED, 1);
+      visual.killedOverlay.lineBetween(ox - r, oy - r, ox + r, oy + r);
+      visual.killedOverlay.lineBetween(ox + r, oy - r, ox - r, oy + r);
+      // Thin highlight stroke
+      visual.killedOverlay.lineStyle(1.5, 0xffaaaa, 0.6);
+      visual.killedOverlay.lineBetween(ox - r, oy - r, ox + r, oy + r);
+      visual.killedOverlay.lineBetween(ox + r, oy - r, ox - r, oy + r);
+    } else {
+      visual.killedOverlay.setVisible(false);
+      visual.killedOverlay.clear();
+    }
+
+    // ── Label ─────────────────────────────────────────────────────────────
+    if (killed) {
+      visual.label.setText(`${robot.id}  DEAD`);
+      visual.label.setColor('#ff6b6b');
+    } else if (robot.rescueFromPosition) {
+      // Heading to collect stranded cargo from the death position
+      visual.label.setText(`${robot.id}  RESCUE ▶ ${robot.coveringForRobotId ?? ''}`);
+      visual.label.setColor('#f97316'); // orange — distinct from normal covering amber
+    } else if (robot.coveringForRobotId) {
+      visual.label.setText(`${robot.id}  ▶ ${robot.coveringForRobotId}`);
+      visual.label.setColor('#f2c14e');
+    } else {
+      visual.label.setText(`${robot.id}  ${Math.round(robot.battery)}%${frozen ? '  DONE' : waiting ? '  HOLD' : ''}`);
+      visual.label.setColor(frozen ? '#6fd4a7' : robot.battery < 25 ? '#f2c14e' : '#e5f3ee');
+    }
+
+    // Dim the robot body when killed
+    visual.controller.container.setAlpha(killed ? 0.35 : 1);
+
     visual.lastPosition = robot.position;
   }
 

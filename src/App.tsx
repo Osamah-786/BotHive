@@ -74,12 +74,14 @@ function useSimulationLoop() {
             tick: nextTick,
             blockedCells: current.blockedCells,
             cloudKilled: current.cloudKilled,
+            killedRobots: current.killedRobots,
             // Fixed logical ticks model the cloud round-trip without timers.
             plannerInterval: Math.max(1, Math.ceil(current.latencyMs / BASE_TICK_MS)),
           });
           const proposed = proposedTick(current.proposed, {
             tick: nextTick,
             blockedCells: current.blockedCells,
+            killedRobots: current.killedRobots,
           });
 
           current.setTraditionalState(traditional.robots, traditional.metrics);
