@@ -1,19 +1,36 @@
 // ─── Cell Types ───────────────────────────────────────────────────────────────
 
-export type CellType = 'floor' | 'shelf' | 'pickup' | 'dropoff' | 'blocked';
+export type CellType = 'floor' | 'shelf' | 'pickup' | 'dropoff' | 'charging' | 'blocked';
 
 export interface Cell {
   x: number; // column index (0 = leftmost)
   y: number; // row index    (0 = topmost)
   type: CellType;
-  /** Optional label shown in the UI, e.g. "P1", "D2" */
+  /** Optional label shown in the UI, e.g. "P1", "D2", or "C1" */
   label?: string;
 }
 
 // ─── Robot ────────────────────────────────────────────────────────────────────
 
-export type RobotState = 'moving' | 'waiting' | 'frozen' | 'killed';
+export type RobotState =
+  | 'moving'
+  | 'waiting'
+  | 'frozen'
+  | 'goingToCharge'
+  | 'charging'
+  | 'failed'
+  | 'killed';
 export type RobotTask = 'pickup' | 'dropoff';
+
+export type PeerHealthStatus = 'online' | 'suspected' | 'failed';
+
+export interface PeerHealth {
+  lastSeenTick: number;
+  lastHeartbeatSeq: number;
+  lastKnownPosition: { x: number; y: number };
+  lastKnownState: RobotState;
+  status: PeerHealthStatus;
+}
 
 export interface Robot {
   id: string; // "R1" | "R2" | "R3"
@@ -31,7 +48,7 @@ export interface Robot {
   /** Index into PICKUP_STATIONS / DROPOFF_STATIONS that this robot is assigned to */
   stationIndex: number;
 
-  /** Battery level 0–100 %. Drains 0.5 % per tick while moving. */
+  /** Battery level 0–100 %. Consumes one task's energy on completed delivery. */
   battery: number;
 
   /**
@@ -45,6 +62,12 @@ export interface Robot {
 
   /** Lifecycle state */
   state: RobotState;
+
+  /** Selected charging station while going to or currently at a charger. */
+  chargingStationIndex?: number;
+
+  /** Last heartbeat/state observed for each peer, maintained locally. */
+  peerHealth?: Record<string, PeerHealth>;
 
   /** Total number of conflict-resolution events this robot has participated in */
   conflictsResolved: number;
@@ -113,6 +136,8 @@ export interface P2PLink {
 export interface SideState {
   robots: Robot[];
   metrics: SimMetrics;
+  remainingBoxes: number;
+  stackBoxes: number[];
 }
 
 export interface ProposedSideState extends SideState {

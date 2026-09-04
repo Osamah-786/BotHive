@@ -2,14 +2,25 @@ import { aStar } from './astar';
 import { findConflictingPairs, resolveRobotMoves } from './conflictResolution';
 import {
   advanceTaskAfterArrival,
+  beginCharging,
   cloneRobot,
+  enterCharging,
+  ENERGY_PER_TASK,
+  LOW_BATTERY_THRESHOLD,
   MAX_TASKS,
   metricsAfterTick,
+  navigationBlockedCells,
+  reservedChargingStations,
   sameCell,
+  selectChargingStation,
   taskTarget,
   applyKillState,
   applyTaskInheritance,
   applyCargoHandoffCleanup,
+  applyDetectedFailureState,
+  updatePeerHealth,
+  finalizeBoxInventory,
+  hasAvailablePickupBox,
 } from './simulation';
 import type { EngineResult } from './simulation';
 import type { P2PLink, ProposedSideState, Robot } from './types';
@@ -18,6 +29,7 @@ export interface ProposedTickOptions {
   tick: number;
   blockedCells?: Set<string>;
   killedRobots?: Set<string>;
+  unresponsiveRobots?: Set<string>;
 }
 
 export interface ProposedTickResult extends EngineResult {
@@ -31,27 +43,72 @@ export interface ProposedTickResult extends EngineResult {
  *
  * Robot failure handling (P2P self-healing):
  * - A killed robot freezes with state='killed'.
- * - The first robot that finishes ALL its own tasks (MAX_TASKS) detects there
- *   is a killed peer whose tasks are incomplete, then inherits that robot's
- *   stationIndex and remaining task count — resuming from exactly where the
- *   killed robot left off.
+ * - An eligible robot detects a failed peer with unfinished work, then inherits
+ *   that robot's station assignment and resumes from where it left off.
  */
 export function proposedTick(
   side: ProposedSideState,
-  { tick, blockedCells = new Set<string>(), killedRobots = new Set<string>() }: ProposedTickOptions,
+  {
+    tick,
+    blockedCells = new Set<string>(),
+    killedRobots = new Set<string>(),
+    unresponsiveRobots = new Set<string>(),
+  }: ProposedTickOptions,
 ): ProposedTickResult {
-  // ── Step 1: Apply permanent kill state ────────────────────────────────────
-  const withKillState = applyKillState(side.robots, killedRobots);
+  // ── Step 1: Exchange existing tick state as heartbeats and detect peers ───
+  const withPeerHealth = updatePeerHealth(side.robots, tick, killedRobots, unresponsiveRobots);
 
-  // ── Step 2: Check for task inheritance opportunity ────────────────────────
-  const withInheritance = applyTaskInheritance(withKillState, killedRobots);
+  // ── Step 2: Apply permanent kill state ────────────────────────────────────
+  // ── Step 3: Check for task inheritance opportunity ────────────────────────
+  const failedPeerIds = new Set(
+    withPeerHealth.flatMap((robot) =>
+      Object.entries(robot.peerHealth ?? {})
+        .filter(([, health]) => health.status === 'failed')
+        .map(([peerId]) => peerId),
+    ),
+  );
+  const withFailureState = applyDetectedFailureState(
+    withPeerHealth,
+    failedPeerIds,
+    unresponsiveRobots,
+    killedRobots,
+  );
+  const withInheritance = applyTaskInheritance(
+    withFailureState,
+    killedRobots,
+    failedPeerIds,
+    side.stackBoxes,
+  );
+  const withKillState = applyKillState(withInheritance, killedRobots);
 
-  // ── Step 3: Prepare each robot's path for this tick ───────────────────────
-  const planned = withInheritance.map((source) => prepareRobot(source, blockedCells, tick));
+  // Failed robots remain physically present at their last position. Keep those
+  // cells in the same dynamic obstacle set used by A* and conflict resolution,
+  // while leaving failed robots out of active movement decisions below.
+  const occupiedCells = new Set(blockedCells);
+  for (const robot of withKillState) {
+    if (robot.state === 'killed' || robot.state === 'failed') {
+      occupiedCells.add(`${robot.position.x},${robot.position.y}`);
+    }
+  }
+  const chargingReservations = reservedChargingStations(withKillState);
 
-  // ── Step 4: Compute P2P communication links for rendering ─────────────────
+  // ── Step 4: Prepare each robot's path for this tick ───────────────────────
+  const planned = withKillState.map((source) =>
+    unresponsiveRobots.has(source.id)
+      ? cloneRobot(source)
+      : prepareRobot(
+          source,
+          occupiedCells,
+          tick,
+          side.stackBoxes,
+          side.remainingBoxes,
+          chargingReservations,
+        ),
+  );
+
+  // ── Step 5: Compute P2P communication links for rendering ─────────────────
   const links: P2PLink[] = [];
-  const conflictPairs = findConflictingPairs(planned, 3, blockedCells);
+  const conflictPairs = findConflictingPairs(planned, 3, occupiedCells);
   const conflictPairKeys = new Set(
     conflictPairs.map(([first, second]) => `${first.id}:${second.id}`),
   );
@@ -59,6 +116,7 @@ export function proposedTick(
     for (let right = left + 1; right < planned.length; right += 1) {
       const first = planned[left];
       const second = planned[right];
+      if (unresponsiveRobots.has(first.id) || unresponsiveRobots.has(second.id)) continue;
       const communicating = isWithinBroadcastRange(first, second);
       const pairKey = `${first.id}:${second.id}`;
       if (communicating || conflictPairKeys.has(pairKey)) {
@@ -67,44 +125,110 @@ export function proposedTick(
     }
   }
 
-  // ── Step 5: Resolve moves (skip killed robots — they don't move) ──────────
-  const activePlanned = planned.filter((r) => r.state !== 'killed');
-  const killedPlanned = planned.filter((r) => r.state === 'killed');
+  // ── Step 6: Resolve moves (skip killed robots — they don't move) ──────────
+  const activePlanned = planned.filter(
+    (r) => r.state !== 'killed' && r.state !== 'failed' && !unresponsiveRobots.has(r.id),
+  );
+  const inactivePlanned = planned.filter(
+    (r) => r.state === 'killed' || r.state === 'failed' || unresponsiveRobots.has(r.id),
+  );
 
   let resolvedActive: Robot[] = activePlanned;
   if (activePlanned.length > 0) {
     const resolution = resolveRobotMoves(activePlanned, {
-      blockedCells,
+      blockedCells: occupiedCells,
       tick,
       allowReroute: true,
       comparePriority,
+      stackBoxes: side.stackBoxes,
     });
     resolvedActive = resolution.robots;
   }
 
-  // Merge killed robots back (they stay in place)
+  // Merge killed and intentionally unresponsive robots back unchanged.
   const resolvedMap = new Map(resolvedActive.map((r) => [r.id, r]));
-  for (const kr of killedPlanned) resolvedMap.set(kr.id, kr);
+  for (const inactive of inactivePlanned) resolvedMap.set(inactive.id, inactive);
   let resolved = side.robots.map((r) => resolvedMap.get(r.id) ?? r);
 
-  // ── Step 6: Cargo handoff cleanup ─────────────────────────────────────────
+  // ── Step 7: Cargo handoff cleanup ─────────────────────────────────────────
   resolved = applyCargoHandoffCleanup(resolved);
+  const inventory = finalizeBoxInventory(side.robots, resolved, side.remainingBoxes, side.stackBoxes);
 
-  const conflictEvents = findConflictingPairs(activePlanned, 3, blockedCells).length;
+  const conflictEvents = findConflictingPairs(activePlanned, 3, occupiedCells).length;
 
   return {
-    robots: resolved,
-    metrics: metricsAfterTick(side.metrics, resolved, conflictEvents, tick),
+    robots: inventory.robots,
+    metrics: metricsAfterTick(side.metrics, inventory.robots, conflictEvents, tick),
+    remainingBoxes: inventory.remainingBoxes,
+    stackBoxes: inventory.stackBoxes,
     p2pLinks: links,
   };
 }
 
 
-function prepareRobot(source: Robot, blockedCells: Set<string>, tick: number): Robot {
+function prepareRobot(
+  source: Robot,
+  blockedCells: Set<string>,
+  tick: number,
+  stackBoxes: number[],
+  remainingBoxes: number,
+  chargingReservations: Set<number>,
+): Robot {
   // Killed robots are frozen — no path planning, no movement.
-  if (source.state === 'killed') return { ...source, path: [] };
+  if (source.state === 'killed' || source.state === 'failed') return { ...source, path: [] };
+  if (source.state === 'charging') return source;
 
-  if (source.tasksCompleted >= MAX_TASKS && source.coveringForRobotId === undefined) {
+  if (source.state === 'goingToCharge') {
+    const robot = cloneRobot(source);
+    if (sameCell(robot.position, taskTarget(robot)) && robot.path.length === 0) {
+      return enterCharging(robot);
+    }
+    if (robot.path.length === 0) {
+      const station = selectChargingStation(robot, blockedCells, chargingReservations);
+      if (station?.index !== robot.chargingStationIndex) {
+        return station
+          ? (() => {
+              chargingReservations.add(station.index);
+              return { ...robot, chargingStationIndex: station.index, path: station.path };
+            })()
+          : { ...robot, state: 'waiting', path: [] };
+      }
+      return {
+        ...robot,
+        path: station?.path ?? [],
+      };
+    }
+    return robot;
+  }
+
+  if (
+    source.battery <= LOW_BATTERY_THRESHOLD &&
+    source.task === 'pickup' &&
+    !source.rescueFromPosition
+  ) {
+    const station = selectChargingStation(source, blockedCells, chargingReservations);
+    return station
+      ? (() => {
+          chargingReservations.add(station.index);
+          return { ...beginCharging(source, station.index), path: station.path };
+        })()
+      : { ...source, state: 'waiting', path: [] };
+  }
+  if (remainingBoxes <= 0 && source.task === 'pickup' && !source.rescueFromPosition) {
+    return { ...source, state: 'frozen', path: [] };
+  }
+
+  // A reconnected robot whose unfinished task is already covered must remain
+  // parked until recovery ownership is released; otherwise it could duplicate
+  // the coverer's work.
+  if (source.state === 'frozen' && source.tasksCompleted < MAX_TASKS) {
+    return { ...source, path: [] };
+  }
+
+  if (source.tasksCompleted >= MAX_TASKS) {
+    return { ...source, state: 'frozen', path: [], coveringForRobotId: undefined };
+  }
+  if (source.task === 'pickup' && !source.rescueFromPosition && source.battery < ENERGY_PER_TASK) {
     return { ...source, state: 'frozen', path: [] };
   }
 
@@ -116,9 +240,15 @@ function prepareRobot(source: Robot, blockedCells: Set<string>, tick: number): R
       // We are just picking up stranded cargo. Switch to dropoff mode and clear
       // rescue location. DO NOT call advanceTaskAfterArrival.
       robot = { ...robot, task: 'dropoff', rescueFromPosition: undefined };
+    } else if (robot.task === 'pickup' && !hasAvailablePickupBox(robot, stackBoxes)) {
+      return { ...robot, state: 'frozen', path: [] };
     } else {
       robot = advanceTaskAfterArrival(robot, tick);
     }
+  }
+
+  if (robot.task === 'pickup' && robot.path.length === 0 && !hasAvailablePickupBox(robot, stackBoxes)) {
+    return { ...robot, state: 'frozen', path: [] };
   }
 
   // ── Local path planning ───────────────────────────────────────────────────
@@ -130,7 +260,11 @@ function prepareRobot(source: Robot, blockedCells: Set<string>, tick: number): R
       robot.path.some((cell) => blockedCells.has(`${cell.x},${cell.y}`)));
 
   if (needsPath) {
-    const newPath = aStar(robot.position, taskTarget(robot), blockedCells);
+    const newPath = aStar(
+      robot.position,
+      taskTarget(robot),
+      navigationBlockedCells(robot, blockedCells),
+    );
     // If no path found, keep the robot waiting in place — don't let it oscillate.
     if (newPath.length === 0 && !sameCell(robot.position, taskTarget(robot))) {
       return { ...robot, path: [], state: 'waiting' };

@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import type { Robot, SimMetrics, P2PLink } from '../engine/types';
-import { urgencyFor } from '../engine/simulation';
+import { TOTAL_BOXES, urgencyFor } from '../engine/simulation';
 import {
   PICKUP_STATIONS,
   DROPOFF_STATIONS,
+  CHARGING_STATIONS,
 } from '../engine/warehouse';
 
 // ─── Colour palette (matches plan) ───────────────────────────────────────────
@@ -24,6 +25,7 @@ function makeRobots(): Robot[] {
     urgency: urgencyFor(`R${i + 1}`, 0),
     timestamp: 0,
     state: 'moving' as const,
+    peerHealth: {},
     conflictsResolved: 0,
     idleTime: 0,
     tasksCompleted: 0,
@@ -53,15 +55,21 @@ export interface SimStore {
   latencyMs: number;           // 20 – 2000
   /** Set of robot IDs that have been manually killed (hardware failure scenario). */
   killedRobots: Set<string>;
+  /** Proposed-side robots in a simulated communication blackout. */
+  unresponsiveRobots: Set<string>;
 
   // ── Simulation sides ────────────────────────────────────────────────────────
   traditional: {
     robots: Robot[];
     metrics: SimMetrics;
+    remainingBoxes: number;
+    stackBoxes: number[];
   };
   proposed: {
     robots: Robot[];
     metrics: SimMetrics;
+    remainingBoxes: number;
+    stackBoxes: number[];
     p2pLinks: P2PLink[];
   };
 
@@ -76,15 +84,19 @@ export interface SimStore {
   toggleBlockCell: (x: number, y: number) => void;
   setLatency: (ms: number) => void;
 
-  /** Kill a specific robot by ID (permanent hardware failure — only Restart resets). */
+  /** Simulate a hardware failure for a specific robot ID. */
   killRobot: (id: string) => void;
+  /** Bring a manually killed robot back online without restarting the simulation. */
+  reviveRobot: (id: string) => void;
+  toggleRobotUnresponsive: (id: string) => void;
+  decreaseRobotBattery: (id: string, amount: number) => void;
 
   /** Called each engine tick to advance the tick counter */
   setTick: (t: number) => void;
 
   /** Called by the engines after computing a new frame */
-  setTraditionalState: (robots: Robot[], metrics: SimMetrics) => void;
-  setProposedState: (robots: Robot[], metrics: SimMetrics, p2pLinks: P2PLink[]) => void;
+  setTraditionalState: (robots: Robot[], metrics: SimMetrics, remainingBoxes: number, stackBoxes: number[]) => void;
+  setProposedState: (robots: Robot[], metrics: SimMetrics, remainingBoxes: number, stackBoxes: number[], p2pLinks: P2PLink[]) => void;
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -101,15 +113,20 @@ export const useSimStore = create<SimStore>((set) => ({
   blockedCells: new Set<string>(),
   latencyMs: 200,
   killedRobots: new Set<string>(),
+  unresponsiveRobots: new Set<string>(),
 
   // ── Initial side states ─────────────────────────────────────────────────────
   traditional: {
     robots: makeRobots(),
     metrics: makeMetrics(),
+    remainingBoxes: TOTAL_BOXES,
+    stackBoxes: [2, 2, 2],
   },
   proposed: {
     robots: makeRobots(),
     metrics: makeMetrics(),
+    remainingBoxes: TOTAL_BOXES,
+    stackBoxes: [2, 2, 2],
     p2pLinks: [],
   },
 
@@ -125,8 +142,9 @@ export const useSimStore = create<SimStore>((set) => ({
       blockedCells: new Set<string>(),
       latencyMs: 200,
       killedRobots: new Set<string>(),
-      traditional: { robots: makeRobots(), metrics: makeMetrics() },
-      proposed:    { robots: makeRobots(), metrics: makeMetrics(), p2pLinks: [] },
+      unresponsiveRobots: new Set<string>(),
+      traditional: { robots: makeRobots(), metrics: makeMetrics(), remainingBoxes: TOTAL_BOXES, stackBoxes: [2, 2, 2] },
+      proposed:    { robots: makeRobots(), metrics: makeMetrics(), remainingBoxes: TOTAL_BOXES, stackBoxes: [2, 2, 2], p2pLinks: [] },
     }),
 
   setSpeed: (s) => set({ speed: s }),
@@ -152,15 +170,48 @@ export const useSimStore = create<SimStore>((set) => ({
       return { killedRobots: next };
     }),
 
+  reviveRobot: (id) =>
+    set((state) => {
+      const killed = new Set(state.killedRobots);
+      killed.delete(id);
+      const unresponsive = new Set(state.unresponsiveRobots);
+      unresponsive.delete(id);
+      return { killedRobots: killed, unresponsiveRobots: unresponsive };
+    }),
+
+  toggleRobotUnresponsive: (id) =>
+    set((state) => {
+      const next = new Set(state.unresponsiveRobots);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return { unresponsiveRobots: next };
+    }),
+
+  decreaseRobotBattery: (id, amount) =>
+    set((state) => ({
+      traditional: {
+        ...state.traditional,
+        robots: state.traditional.robots.map((robot) =>
+          robot.id === id ? { ...robot, battery: Math.max(0, robot.battery - amount) } : robot,
+        ),
+      },
+      proposed: {
+        ...state.proposed,
+        robots: state.proposed.robots.map((robot) =>
+          robot.id === id ? { ...robot, battery: Math.max(0, robot.battery - amount) } : robot,
+        ),
+      },
+    })),
+
   setTick: (t) => set({ tick: t }),
 
-  setTraditionalState: (robots, metrics) =>
-    set((s) => ({ traditional: { ...s.traditional, robots, metrics } })),
+  setTraditionalState: (robots, metrics, remainingBoxes, stackBoxes) =>
+    set((s) => ({ traditional: { ...s.traditional, robots, metrics, remainingBoxes, stackBoxes } })),
 
-  setProposedState: (robots, metrics, p2pLinks) =>
-    set({ proposed: { robots, metrics, p2pLinks } }),
+  setProposedState: (robots, metrics, remainingBoxes, stackBoxes, p2pLinks) =>
+    set({ proposed: { robots, metrics, remainingBoxes, stackBoxes, p2pLinks } }),
 }));
 
 // ─── Convenience re-exports ───────────────────────────────────────────────────
 
-export { PICKUP_STATIONS, DROPOFF_STATIONS };
+export { PICKUP_STATIONS, DROPOFF_STATIONS, CHARGING_STATIONS };

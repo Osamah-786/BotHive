@@ -2,14 +2,22 @@ import { aStar } from './astar';
 import { resolveRobotMoves } from './conflictResolution';
 import {
   advanceTaskAfterArrival,
+  beginCharging,
   cloneRobot,
+  ENERGY_PER_TASK,
+  LOW_BATTERY_THRESHOLD,
   MAX_TASKS,
   metricsAfterTick,
+  navigationBlockedCells,
+  reservedChargingStations,
   sameCell,
+  selectChargingStation,
   taskTarget,
   applyKillState,
   applyTaskInheritance,
   applyCargoHandoffCleanup,
+  finalizeBoxInventory,
+  hasAvailablePickupBox,
 } from './simulation';
 import type { EngineResult } from './simulation';
 import type { Robot, SideState } from './types';
@@ -45,29 +53,57 @@ export function traditionalTick(
       state: 'frozen' as const,
       idleTime: robot.idleTime + 1,
     }));
-    return { robots, metrics: metricsAfterTick(side.metrics, robots, 0, tick) };
+    return {
+      robots,
+      metrics: metricsAfterTick(side.metrics, robots, 0, tick),
+      remainingBoxes: side.remainingBoxes,
+      stackBoxes: [...side.stackBoxes],
+    };
   }
 
-  const withKillState = applyKillState(side.robots, killedRobots);
-  const withInheritance = applyTaskInheritance(withKillState, killedRobots);
+  const withInheritance = applyTaskInheritance(side.robots, killedRobots, new Set(), side.stackBoxes);
+  const withKillState = applyKillState(withInheritance, killedRobots);
+
+  const occupiedCells = new Set(blockedCells);
+  for (const robot of withKillState) {
+    if (robot.state === 'killed' || robot.state === 'failed') {
+      occupiedCells.add(`${robot.position.x},${robot.position.y}`);
+    }
+  }
+  const chargingReservations = reservedChargingStations(withKillState);
 
   const shouldPlan = tick % Math.max(1, plannerInterval) === 0;
   
   // Separate out killed from active
-  const activeInheritance = withInheritance.filter((r) => r.state !== 'killed');
-  const killedPlanned = withInheritance.filter((r) => r.state === 'killed');
+  const activeInheritance = withKillState.filter(
+    (r) => r.state !== 'killed' && r.state !== 'failed',
+  );
+  const killedPlanned = withKillState.filter(
+    (r) => r.state === 'killed' || r.state === 'failed',
+  );
   
-  const planned = activeInheritance.map((source) => prepareRobot(source, shouldPlan, tick));
+  const planned = activeInheritance.map((source) =>
+    prepareRobot(
+      source,
+      shouldPlan,
+      tick,
+      occupiedCells,
+      side.stackBoxes,
+      side.remainingBoxes,
+      chargingReservations,
+    ),
+  );
   
   let resolvedActive = planned;
   let conflictEvents = 0;
   if (planned.length > 0) {
     const resolution = resolveRobotMoves(planned, {
-      blockedCells,
+      blockedCells: occupiedCells,
       tick,
       horizon: 1,
       allowReroute: false,
       comparePriority: (first, second) => second.id.localeCompare(first.id),
+      stackBoxes: side.stackBoxes,
     });
     resolvedActive = resolution.robots;
     conflictEvents = resolution.conflictEvents;
@@ -79,16 +115,65 @@ export function traditionalTick(
   let resolved = side.robots.map((r) => resolvedMap.get(r.id) ?? r);
 
   resolved = applyCargoHandoffCleanup(resolved);
+  const inventory = finalizeBoxInventory(side.robots, resolved, side.remainingBoxes, side.stackBoxes);
 
-  return { robots: resolved, metrics: metricsAfterTick(side.metrics, resolved, conflictEvents, tick) };
+  return {
+    robots: inventory.robots,
+    metrics: metricsAfterTick(side.metrics, inventory.robots, conflictEvents, tick),
+    remainingBoxes: inventory.remainingBoxes,
+    stackBoxes: inventory.stackBoxes,
+  };
 }
 
 function prepareRobot(
   source: Robot,
   shouldPlan: boolean,
   tick: number,
+  blockedCells: Set<string>,
+  stackBoxes: number[],
+  remainingBoxes: number,
+  chargingReservations: Set<number>,
 ): Robot {
-  if (source.tasksCompleted >= MAX_TASKS && source.coveringForRobotId === undefined) {
+  if (source.state === 'killed' || source.state === 'failed') return { ...source, path: [] };
+  if (source.state === 'charging') return source;
+
+  if (source.state === 'goingToCharge') {
+    const robot = cloneRobot(source);
+    if (sameCell(robot.position, taskTarget(robot)) && robot.path.length === 0) {
+      return { ...robot, state: 'charging' };
+    }
+    if (robot.path.length === 0) {
+      const station = selectChargingStation(robot, blockedCells, chargingReservations);
+      return station
+        ? (() => {
+            chargingReservations.add(station.index);
+            return { ...robot, chargingStationIndex: station.index, path: station.path };
+          })()
+        : { ...robot, state: 'waiting', path: [] };
+    }
+    return robot;
+  }
+  if (
+    source.battery <= LOW_BATTERY_THRESHOLD &&
+    source.task === 'pickup' &&
+    !source.rescueFromPosition
+  ) {
+    const station = selectChargingStation(source, blockedCells, chargingReservations);
+    return station
+      ? (() => {
+          chargingReservations.add(station.index);
+          return { ...beginCharging(source, station.index), path: station.path };
+        })()
+      : { ...source, state: 'waiting', path: [] };
+  }
+
+  if (source.tasksCompleted >= MAX_TASKS) {
+    return { ...source, state: 'frozen', path: [], coveringForRobotId: undefined };
+  }
+  if (source.task === 'pickup' && !source.rescueFromPosition && source.battery < ENERGY_PER_TASK) {
+    return { ...source, state: 'frozen', path: [] };
+  }
+  if (remainingBoxes <= 0 && source.task === 'pickup' && !source.rescueFromPosition) {
     return { ...source, state: 'frozen', path: [] };
   }
 
@@ -99,8 +184,14 @@ function prepareRobot(
   if (sameCell(robot.position, target) && robot.path.length === 0) {
     if (robot.rescueFromPosition) {
       robot = { ...robot, task: 'dropoff', rescueFromPosition: undefined };
+    } else if (robot.task === 'pickup' && !hasAvailablePickupBox(robot, stackBoxes)) {
+      return { ...robot, state: 'frozen', path: [] };
     } else {
       robot = advanceTaskAfterArrival(robot, tick);
+    }
+
+    if (robot.task === 'pickup' && robot.path.length === 0 && !hasAvailablePickupBox(robot, stackBoxes)) {
+      return { ...robot, state: 'frozen', path: [] };
     }
   }
 
@@ -109,7 +200,10 @@ function prepareRobot(
     // It keeps dispatching its last known warehouse map; when a robot reaches an
     // injected obstacle, the blocked next waypoint remains in its route and it
     // waits there until the aisle is cleared instead of locally rerouting.
-    robot = { ...robot, path: aStar(robot.position, taskTarget(robot)) };
+    robot = {
+      ...robot,
+      path: aStar(robot.position, taskTarget(robot), navigationBlockedCells(robot, blockedCells)),
+    };
   }
 
   // If a coverer finishes all tasks, clear its coverage so it can cover another

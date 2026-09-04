@@ -7,6 +7,7 @@ import { createWarehouseBlock } from '../custom-assets/WarehouseBlock';
 import { useSimStore } from '../../store/useSimStore';
 import { GRID_COLS, GRID_ROWS, WAREHOUSE_GRID } from '../../engine/warehouse';
 import type { P2PLink, Robot } from '../../engine/types';
+import chargingStationSheet from '../../../charging_station.png';
 
 const CELL = 100;
 const WORLD_WIDTH = GRID_COLS * CELL;
@@ -23,8 +24,8 @@ interface WarehouseFrame {
   links: P2PLink[];
   isPlaying: boolean;
   completedTasks: number;
-  /** Per-robot tasks completed, indexed 0 = R1, 1 = R2, 2 = R3 */
-  robotTaskCounts: number[];
+  /** Remaining physical boxes in each stack, indexed 0 = Stack 1, 1 = Stack 2, 2 = Stack 3 */
+  stackBoxes: number[];
   /**
    * Whether each robot (indexed 0 = R1, 1 = R2, 2 = R3) is currently
    * carrying stock (i.e. on the dropoff leg). Used to drain the source rack
@@ -55,6 +56,7 @@ export function PhaserWarehouse({ side }: PhaserWarehouseProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<WarehouseScene | null>(null);
   const robots = useSimStore((state) => (side === 'traditional' ? state.traditional.robots : state.proposed.robots));
+  const stackBoxes = useSimStore((state) => (side === 'traditional' ? state.traditional.stackBoxes : state.proposed.stackBoxes));
   const blockedCells = useSimStore((state) => state.blockedCells);
   const links = useSimStore((state) => state.proposed.p2pLinks);
   const isPlaying = useSimStore((state) => state.isPlaying);
@@ -90,39 +92,13 @@ export function PhaserWarehouse({ side }: PhaserWarehouseProps) {
   }, [side]);
 
   useEffect(() => {
-    // Derive per-rack task counts and carrying flags.
-    //
-    // Rack i maps to the station originally owned by robot R(i+1).
-    // A covering robot has a different stationIndex than its robot number,
-    // so we must handle two cases separately:
-    //   1. The rack the robot is *currently working* (robot.stationIndex)
-    //   2. The covering robot's *own* rack (originalIndex from robot.id)
-    //      → must stay pinned at MAX_TASKS (done), not reset to 0.
-    const MAX_TASKS_COUNT = 6; // mirrors MAX_TASKS from simulation.ts
-    const robotTaskCounts = [0, 0, 0];
     const robotCarrying = [false, false, false];
 
     for (const robot of robots) {
-      // Update the rack this robot is actively working on this tick.
-      // Use Math.max so a coverer (inheriting tasks) or dead robot doesn't overwrite progress.
-      robotTaskCounts[robot.stationIndex] = Math.max(
-        robotTaskCounts[robot.stationIndex],
-        robot.tasksCompleted
-      );
-
       // An item is in-transit if ANY robot assigned to this rack is physically carrying it.
       // (A dead robot holds it until the coverer completes the rescue transit)
       const isCarrying = robot.task === 'dropoff' && !robot.rescueFromPosition;
       robotCarrying[robot.stationIndex] = robotCarrying[robot.stationIndex] || isCarrying;
-
-      // If a robot is working on a rack other than its original one, it means
-      // it fully completed its own tasks and is now covering for a killed peer
-      // (possibly its second or third peer). Pin its own rack at MAX_TASKS.
-      const originalIndex = Number(robot.id.slice(1)) - 1; // R1→0, R2→1, R3→2
-      if (robot.stationIndex !== originalIndex) {
-        robotTaskCounts[originalIndex] = MAX_TASKS_COUNT;
-        robotCarrying[originalIndex] = false;
-      }
     }
 
     sceneRef.current?.sync({
@@ -131,10 +107,10 @@ export function PhaserWarehouse({ side }: PhaserWarehouseProps) {
       links: side === 'proposed' ? links : [],
       isPlaying,
       completedTasks,
-      robotTaskCounts,
+      stackBoxes,
       robotCarrying,
     });
-  }, [robots, blockedCells, links, isPlaying, completedTasks, side]);
+  }, [robots, stackBoxes, blockedCells, links, isPlaying, completedTasks, side]);
 
   return <div ref={parentRef} className="h-full w-full" aria-label={`${side} live warehouse`} />;
 }
@@ -183,7 +159,7 @@ class WarehouseScene extends Phaser.Scene {
   private frame: WarehouseFrame | null = null;
   private linkLayer!: Phaser.GameObjects.Graphics;
   private readonly side: Side;
-  private lastRobotTaskCounts: number[] = [-1, -1, -1];
+  private lastStackBoxes: number[] = [-1, -1, -1];
   private lastRobotCarrying: boolean[] = [false, false, false];
 
   constructor(side: Side) {
@@ -197,11 +173,16 @@ class WarehouseScene extends Phaser.Scene {
     this.buildDecorativeBlocks();
     this.buildDedicatedRacks();
     this.buildStations();          // stations drawn on top of racks
+    this.buildChargingStations();
     this.linkLayer = this.add.graphics().setDepth(35);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.fitCamera, this);
     this.fitCamera();
 
     if (this.frame) this.renderFrame(this.frame, false);
+  }
+
+  preload() {
+    this.load.image('charging-station-sheet', chargingStationSheet);
   }
 
   sync(frame: WarehouseFrame) {
@@ -269,6 +250,52 @@ class WarehouseScene extends Phaser.Scene {
           })
           .setOrigin(0.5)
           .setDepth(12);
+      }
+    }
+  }
+
+  private buildChargingStations() {
+    for (const row of WAREHOUSE_GRID) {
+      for (const cell of row) {
+        if (cell.type !== 'charging') continue;
+
+        const highlight = this.add.graphics().setDepth(23);
+        highlight.fillStyle(0xffffff, 0.9);
+        highlight.fillRoundedRect(
+          cell.x * CELL + 9,
+          cell.y * CELL + 9,
+          CELL - 18,
+          CELL - 18,
+          12,
+        );
+        highlight.lineStyle(4, 0xffffff, 1);
+        highlight.strokeRoundedRect(
+          cell.x * CELL + 5,
+          cell.y * CELL + 5,
+          CELL - 10,
+          CELL - 10,
+          14,
+        );
+
+        const image = this.add
+          .image(cell.x * CELL + CELL / 2, cell.y * CELL + CELL / 2 - 4, 'charging-station-sheet')
+          .setCrop(0, 50, 320, 360)
+          .setDisplaySize(82, 92)
+          .setDepth(24);
+
+        this.add
+          .text(cell.x * CELL + CELL / 2, cell.y * CELL + CELL - 7, cell.label ?? '', {
+            fontFamily: 'monospace',
+            fontSize: '15px',
+            fontStyle: 'bold',
+            color: '#86efac',
+            stroke: '#071617',
+            strokeThickness: 4,
+          })
+          .setOrigin(0.5, 1)
+          .setDepth(25);
+
+        image.setName(`charging-${cell.label ?? `${cell.x}-${cell.y}`}`);
       }
     }
   }
@@ -371,7 +398,7 @@ class WarehouseScene extends Phaser.Scene {
   }
 
   private renderFrame(frame: WarehouseFrame, animate: boolean) {
-    this.renderStorageInventory(frame.robotTaskCounts, frame.robotCarrying);
+    this.renderStorageInventory(frame.stackBoxes, frame.robotCarrying);
     this.renderLinks(frame);
     this.renderObstacles(frame.blockedCells);
 
@@ -393,12 +420,12 @@ class WarehouseScene extends Phaser.Scene {
    * immediately shows one fewer item — it shouldn't wait until delivery.
    * Completely independent between robots.
    */
-  private renderStorageInventory(robotTaskCounts: number[], robotCarrying: boolean[]) {
+  private renderStorageInventory(stackBoxes: number[], robotCarrying: boolean[]) {
     const changed =
-      robotTaskCounts.some((count, i) => count !== this.lastRobotTaskCounts[i]) ||
+      stackBoxes.some((count, i) => count !== this.lastStackBoxes[i]) ||
       robotCarrying.some((carrying, i) => carrying !== this.lastRobotCarrying[i]);
     if (!changed) return;
-    this.lastRobotTaskCounts = [...robotTaskCounts];
+    this.lastStackBoxes = [...stackBoxes];
     this.lastRobotCarrying = [...robotCarrying];
 
     for (let i = 0; i < 3; i++) {
@@ -406,19 +433,18 @@ class WarehouseScene extends Phaser.Scene {
       const dstRack = this.destRacks[i];
       if (!srcRack || !dstRack) continue;
 
-      const tasks = robotTaskCounts[i] ?? 0;
+      const initialBoxes = 2;
+      const remaining = Math.max(0, Math.min(initialBoxes, stackBoxes[i] ?? 0));
       const carrying = robotCarrying[i] ?? false;
-      const cap = srcRack.capacity;
+      const delivered = Math.max(0, Math.min(initialBoxes, initialBoxes - remaining));
 
-      // Items confirmed delivered to dest rack
-      const delivered = Math.min(tasks, cap);
       // Items currently in-transit (robot is carrying one right now)
-      const inTransit = carrying && tasks + 1 <= cap ? 1 : 0;
+      const inTransit = carrying && remaining > 0 ? 1 : 0;
 
-      // Source = (total capacity) − (delivered) − (currently being carried)
-      srcRack.setFillLevel((cap - delivered - inTransit) / cap);
+      // Source inventory is persistent engine state, not robot ownership/progress.
+      srcRack.setFillLevel(Math.max(0, remaining - inTransit) / initialBoxes);
       // Dest fills only on confirmed delivery
-      dstRack.setFillLevel(delivered / cap);
+      dstRack.setFillLevel(delivered / initialBoxes);
     }
   }
 
@@ -458,6 +484,7 @@ class WarehouseScene extends Phaser.Scene {
     }
 
     const killed = robot.state === 'killed';
+    const failed = robot.state === 'failed';
     const frozen = robot.state === 'frozen';
     const waiting = robot.state === 'waiting';
 
@@ -478,7 +505,7 @@ class WarehouseScene extends Phaser.Scene {
 
     // ── State ring & body tint ─────────────────────────────────────────────
     const themeBody = ROBOT_THEMES[robot.stationIndex]?.body || MESH;
-    if (killed) {
+    if (killed || failed) {
       visual.state.setStrokeStyle(3, KILLED, 0.9);
       visual.state.setFillStyle(KILLED, 0.18);
     } else if (frozen) {
@@ -490,7 +517,7 @@ class WarehouseScene extends Phaser.Scene {
     }
 
     // ── Killed X overlay ──────────────────────────────────────────────────
-    if (killed) {
+    if (killed || failed) {
       visual.killedOverlay.setVisible(true);
       visual.killedOverlay.clear();
       const ox = target.x;
@@ -515,6 +542,9 @@ class WarehouseScene extends Phaser.Scene {
     // ── Label ─────────────────────────────────────────────────────────────
     if (killed) {
       visual.label.setText(`${robot.id}  DEAD`);
+      visual.label.setColor('#ff6b6b');
+    } else if (failed) {
+      visual.label.setText(`${robot.id}  FAILED`);
       visual.label.setColor('#ff6b6b');
     } else if (robot.rescueFromPosition) {
       // Heading to collect stranded cargo from the death position

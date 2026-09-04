@@ -1,4 +1,4 @@
-import { CloudOff, MapPinOff, Skull } from 'lucide-react';
+import { CloudOff, HeartPulse, MapPinOff, Radio, Skull } from 'lucide-react';
 import { useSimStore } from '../../store/useSimStore';
 
 // A shared route on the upper transfer lane. Users can also click any floor tile.
@@ -18,12 +18,16 @@ export function ChaosPanel() {
   const cloudKilled = useSimStore((state) => state.cloudKilled);
   const latencyMs = useSimStore((state) => state.latencyMs);
   const killedRobots = useSimStore((state) => state.killedRobots);
+  const unresponsiveRobots = useSimStore((state) => state.unresponsiveRobots);
   const isDemoAisleBlocked = useSimStore((state) => state.blockedCells.has(`${DEMO_AISLE.x},${DEMO_AISLE.y}`));
   const killCloud = useSimStore((state) => state.killCloud);
   const restoreCloud = useSimStore((state) => state.restoreCloud);
   const toggleBlockCell = useSimStore((state) => state.toggleBlockCell);
   const setLatency = useSimStore((state) => state.setLatency);
   const killRobot = useSimStore((state) => state.killRobot);
+  const reviveRobot = useSimStore((state) => state.reviveRobot);
+  const toggleRobotUnresponsive = useSimStore((state) => state.toggleRobotUnresponsive);
+  const decreaseRobotBattery = useSimStore((state) => state.decreaseRobotBattery);
 
   return (
     <section className="flex flex-wrap items-center justify-end gap-2" aria-label="Fault injection controls">
@@ -45,37 +49,101 @@ export function ChaosPanel() {
         {cloudKilled ? 'Cloud offline' : 'Kill cloud'}
       </button>
 
-      {/* ── Per-robot kill (permanent) ─────────────────────────────────── */}
-      <div
-        className="flex items-center gap-1 border border-[#31585a] bg-[#0c2021] px-2 h-8"
-        role="group"
-        aria-label="Robot failure controls"
-      >
-        <Skull size={11} strokeWidth={2.1} className="text-[#86aaa4] shrink-0" />
-        <span className="font-mono text-[9px] tracking-[0.1em] text-[#86aaa4] uppercase mr-0.5">Kill</span>
+      {/* ── Per-robot kill/revive ──────────────────────────────────────── */}
+      <div className="flex items-center gap-1">
+        <div className="flex h-8 items-center gap-1 border border-[#31585a] bg-[#0c2021] px-2" role="group" aria-label="Kill robots">
+          <Skull size={11} strokeWidth={2.1} className="shrink-0 text-[#86aaa4]" />
+          <span className="mr-0.5 font-mono text-[9px] tracking-[0.1em] text-[#86aaa4] uppercase">Kill</span>
+          {ROBOT_IDS.map((id) => {
+            const isKilled = killedRobots.has(id);
+            const color = ROBOT_COLORS[id];
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => killRobot(id)}
+                disabled={isKilled}
+                aria-pressed={isKilled}
+                title={`Kill ${id}`}
+                className="inline-flex h-5 w-8 items-center justify-center border font-mono text-[10px] font-bold tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-[#f59e0b] disabled:cursor-not-allowed"
+                style={{ borderColor: isKilled ? '#5a2020' : `${color}55`, background: isKilled ? '#1a0808' : `${color}18`, color: isKilled ? '#7a3333' : color }}
+              >
+                {isKilled ? '✕' : id}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex h-8 items-center gap-1 border border-[#31585a] bg-[#0c2021] px-2" role="group" aria-label="Revive robots">
+          <HeartPulse size={11} strokeWidth={2.1} className="shrink-0 text-[#86aaa4]" />
+          <span className="mr-0.5 font-mono text-[9px] tracking-[0.1em] text-[#86aaa4] uppercase">Alive</span>
+          {ROBOT_IDS.map((id) => {
+            const isKilled = killedRobots.has(id);
+            const color = ROBOT_COLORS[id];
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => reviveRobot(id)}
+                disabled={!isKilled}
+                aria-pressed={!isKilled}
+                title={`Bring ${id} back online`}
+                className="inline-flex h-5 w-8 items-center justify-center border font-mono text-[10px] font-bold tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-[#f59e0b] disabled:cursor-not-allowed"
+                style={{ borderColor: isKilled ? `${color}88` : '#31585a', background: isKilled ? `${color}18` : '#0c2021', color: isKilled ? color : '#426765' }}
+              >
+                {id}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Battery test controls ─────────────────────────────────────────── */}
+      <div className="flex h-8 items-center gap-1 border border-[#31585a] bg-[#0c2021] px-2" role="group" aria-label="Decrease robot battery">
+        <span className="mr-0.5 font-mono text-[9px] tracking-[0.1em] text-[#86aaa4] uppercase">Battery −</span>
         {ROBOT_IDS.map((id) => {
-          const isKilled = killedRobots.has(id);
           const color = ROBOT_COLORS[id];
           return (
             <button
               key={id}
               type="button"
-              onClick={() => { if (!isKilled) killRobot(id); }}
-              disabled={isKilled}
-              aria-pressed={isKilled}
-              title={
-                isKilled
-                  ? `${id} is offline — Restart to reset`
-                  : `Kill ${id}: its remaining tasks will be picked up by the first free robot (Proposed side only)`
-              }
-              className="inline-flex h-5 w-8 items-center justify-center font-mono text-[10px] font-bold tracking-[0.06em] border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-[#f59e0b] disabled:cursor-not-allowed"
+              onClick={() => decreaseRobotBattery(id, 10)}
+              title={`Decrease ${id} battery by 10%`}
+              className="inline-flex h-5 w-8 items-center justify-center border font-mono text-[10px] font-bold tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-[#f59e0b]"
+              style={{ borderColor: `${color}55`, background: `${color}18`, color }}
+            >
+              {id}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Heartbeat failure simulation ─────────────────────────────────── */}
+      <div
+        className="flex h-8 items-center gap-1 border border-[#31585a] bg-[#0c2021] px-2"
+        role="group"
+        aria-label="Heartbeat failure simulation"
+      >
+        <Radio size={11} strokeWidth={2.1} className="shrink-0 text-[#86aaa4]" />
+        <span className="mr-0.5 font-mono text-[9px] tracking-[0.1em] text-[#86aaa4] uppercase">Silence</span>
+        {ROBOT_IDS.map((id) => {
+          const isUnresponsive = unresponsiveRobots.has(id);
+          const color = ROBOT_COLORS[id];
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => toggleRobotUnresponsive(id)}
+              disabled={killedRobots.has(id)}
+              aria-pressed={isUnresponsive}
+              title={isUnresponsive ? `${id} heartbeat stopped — reconnect` : `Stop ${id} heartbeats`}
+              className="inline-flex h-5 w-8 items-center justify-center border font-mono text-[10px] font-bold tracking-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-[#f59e0b] disabled:cursor-not-allowed"
               style={{
-                borderColor: isKilled ? '#5a2020' : `${color}55`,
-                background: isKilled ? '#1a0808' : `${color}18`,
-                color: isKilled ? '#7a3333' : color,
+                borderColor: isUnresponsive ? '#f15b5b' : `${color}55`,
+                background: isUnresponsive ? '#351719' : `${color}18`,
+                color: isUnresponsive ? '#ffc2c2' : color,
               }}
             >
-              {isKilled ? '✕' : id}
+              {isUnresponsive ? 'OFF' : id}
             </button>
           );
         })}

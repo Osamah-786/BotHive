@@ -30,6 +30,12 @@ export const DROPOFF_STATIONS: { x: number; y: number; label: string }[] = [
   { x: 18, y: 11, label: 'D3' },
 ];
 
+/** Fixed charging-station docking cells at the warehouse perimeter. */
+export const CHARGING_STATIONS: { x: number; y: number; label: string }[] = [
+  { x: 2, y: 12, label: 'C1' },
+  { x: 17, y: 1, label: 'C2' },
+];
+
 // ─── Shelf block definitions ──────────────────────────────────────────────────
 
 /**
@@ -106,6 +112,10 @@ function buildGrid(): Cell[][] {
   // Stamp dropoff stations
   for (const d of DROPOFF_STATIONS) {
     grid[d.y][d.x] = { x: d.x, y: d.y, type: 'dropoff', label: d.label };
+  }
+
+  for (const c of CHARGING_STATIONS) {
+    grid[c.y][c.x] = { x: c.x, y: c.y, type: 'charging', label: c.label };
   }
 
   return grid;

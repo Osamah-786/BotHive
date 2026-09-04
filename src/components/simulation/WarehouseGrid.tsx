@@ -10,6 +10,7 @@ const CELL_COLORS: Record<CellType, string> = {
   shelf:   '#6b4226', // dark wood brown
   pickup:  '#f59e0b', // amber
   dropoff: '#ea7c1a', // orange
+  charging:'#22c55e', // green
   blocked: '#ef4444',
 };
 
@@ -19,6 +20,7 @@ const CELL_DEPTH: Record<CellType, number> = {
   shelf:   0.35,
   pickup:  0.08,
   dropoff: 0.08,
+  charging: 0.08,
   blocked: 0.25,
 };
 
@@ -28,6 +30,7 @@ const CELL_EMISSIVE: Record<CellType, number> = {
   shelf:   0,
   pickup:  0.25,
   dropoff: 0.20,
+  charging: 0.35,
   blocked: 0.40,
 };
 
@@ -35,6 +38,7 @@ const CELL_EMISSIVE: Record<CellType, number> = {
 const LABEL_COLOR: Partial<Record<CellType, string>> = {
   pickup:  '#1a1209', // dark — reads against amber
   dropoff: '#1a1209', // dark — reads against orange
+  charging:'#052e16', // dark green — reads against the charger
 };
 
 // ─── Thin gap between tiles to read the grid structure ───────────────────────

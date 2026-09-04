@@ -1,7 +1,11 @@
 import { aStar, type GridPos } from './astar';
 import {
   advanceTaskAfterArrival,
+  advanceCharging,
+  enterCharging,
   MAX_TASKS,
+  hasAvailablePickupBox,
+  navigationBlockedCells,
   sameCell,
   taskTarget,
 } from './simulation';
@@ -24,6 +28,7 @@ export interface ConflictResolutionOptions {
   allowReroute: boolean;
   /** Traditional cloud coordination intentionally only looks one step ahead. */
   horizon?: number;
+  stackBoxes?: number[];
 }
 
 export interface ConflictResolutionResult {
@@ -85,14 +90,20 @@ export function resolveRobotMoves(
   );
 
   for (const robot of priorityOrder) {
-    if (robot.tasksCompleted >= MAX_TASKS && !robot.coveringForRobotId) {
+    if (robot.state === 'charging') {
+      reservations.push({ robotId: robot.id, trajectory: holdTrajectory(robot.position, horizon) });
+      resolvedById.set(robot.id, advanceCharging(robot));
+      continue;
+    }
+    if (robot.tasksCompleted >= MAX_TASKS) {
       reservations.push({ robotId: robot.id, trajectory: holdTrajectory(robot.position, horizon) });
       resolvedById.set(robot.id, { ...robot, state: 'frozen', path: [] });
       continue;
     }
 
-    const route = usableRoute(robot.path, options.blockedCells);
-    const trajectory = buildTrajectory(robot, route, horizon, options.blockedCells);
+    const robotBlockedCells = navigationBlockedCells(robot, options.blockedCells);
+    const route = usableRoute(robot.path, robotBlockedCells);
+    const trajectory = buildTrajectory(robot, route, horizon, robotBlockedCells);
     const hasReservationConflict = conflictsWithReservations(trajectory, reservations);
 
     reservations.push({ robotId: robot.id, trajectory });
@@ -100,7 +111,7 @@ export function resolveRobotMoves(
       robot.id,
       hasReservationConflict
         ? waitRobot(robot, conflictParticipants.has(robot.id))
-        : advanceRobot(robot, route, options.blockedCells, options.tick),
+        : advanceRobot(robot, route, robotBlockedCells, options.tick, options.stackBoxes),
     );
   }
 
@@ -140,12 +151,19 @@ function resolveCooperativeMoves(
   const selected = chooseJointMoves(robots, candidates);
 
   const resolved = robots.map((robot, index) => {
-    if (robot.tasksCompleted >= MAX_TASKS && !robot.coveringForRobotId) return { ...robot, state: 'frozen' as const, path: [] };
+    if (robot.state === 'charging') return advanceCharging(robot);
+    if (robot.tasksCompleted >= MAX_TASKS) return { ...robot, state: 'frozen' as const, path: [] };
     const candidate = selected[index];
     if (!candidate || sameCell(candidate.position, robot.position)) {
       return waitRobot(robot, conflictParticipants.has(robot.id));
     }
-    return advanceRobot(robot, candidate.route, options.blockedCells, options.tick);
+    return advanceRobot(
+      robot,
+      candidate.route,
+      navigationBlockedCells(robot, options.blockedCells),
+      options.tick,
+      options.stackBoxes,
+    );
   });
 
   return {
@@ -160,13 +178,14 @@ function buildMoveCandidates(
   blockedCells: Set<string>,
   priorityWeight: number,
 ): MoveCandidate[] {
-  if (robot.tasksCompleted >= MAX_TASKS && !robot.coveringForRobotId) {
+  if (robot.tasksCompleted >= MAX_TASKS) {
     return [{ position: { ...robot.position }, route: [], score: 0 }];
   }
 
+  const robotBlockedCells = navigationBlockedCells(robot, blockedCells);
   const target = taskTarget(robot);
-  const currentDistance = routeDistance(robot.position, target, blockedCells);
-  const others = new Set(blockedCells);
+  const currentDistance = routeDistance(robot.position, target, robotBlockedCells);
+  const others = new Set(robotBlockedCells);
   for (const other of robots) {
     if (other.id !== robot.id) others.add(cellKey(other.position));
   }
@@ -183,8 +202,8 @@ function buildMoveCandidates(
       return;
     }
 
-    const localRoute = preferredRoute ?? routeFromMove(position, target, others, blockedCells);
-    const nextDistance = routeDistance(position, target, blockedCells);
+    const localRoute = preferredRoute ?? routeFromMove(position, target, others, robotBlockedCells);
+    const nextDistance = routeDistance(position, target, robotBlockedCells);
     const progress = currentDistance - nextDistance;
     const isPreferred = robot.path[0] !== undefined && sameCell(position, robot.path[0]);
     candidates.push({
@@ -205,11 +224,11 @@ function buildMoveCandidates(
     return [{ position: { ...robot.position }, route: [], score: -1 }];
   }
 
-  if (primary && isPassable(primary.x, primary.y, blockedCells)) {
-    addCandidate(primary, usableRoute(robot.path, blockedCells));
+  if (primary && isPassable(primary.x, primary.y, robotBlockedCells)) {
+    addCandidate(primary, usableRoute(robot.path, robotBlockedCells));
   }
   for (const neighbour of neighbours(robot.position.x, robot.position.y)) {
-    if (isPassable(neighbour.x, neighbour.y, blockedCells)) addCandidate(neighbour);
+    if (isPassable(neighbour.x, neighbour.y, robotBlockedCells)) addCandidate(neighbour);
   }
   addCandidate(robot.position);
   return candidates;
@@ -291,16 +310,16 @@ export function findConflictingPairs(
       const first = robots[left];
       const second = robots[right];
       const firstTrajectory = buildTrajectory(
-        first,
-        usableRoute(first.path, blockedCells),
-        horizon,
-        blockedCells,
+      first,
+      usableRoute(first.path, navigationBlockedCells(first, blockedCells)),
+      horizon,
+      navigationBlockedCells(first, blockedCells),
       );
       const secondTrajectory = buildTrajectory(
-        second,
-        usableRoute(second.path, blockedCells),
-        horizon,
-        blockedCells,
+      second,
+      usableRoute(second.path, navigationBlockedCells(second, blockedCells)),
+      horizon,
+      navigationBlockedCells(second, blockedCells),
       );
       if (trajectoriesConflict(firstTrajectory, secondTrajectory)) pairs.push([first, second]);
     }
@@ -361,6 +380,7 @@ function advanceRobot(
   route: GridPos[],
   blockedCells: Set<string>,
   tick: number,
+  stackBoxes?: number[],
 ): Robot {
   const next = route[0];
   if (!next || blockedCells.has(cellKey(next))) return waitRobot(robot, false);
@@ -370,11 +390,12 @@ function advanceRobot(
     position: { ...next },
     path: route.slice(1),
     state: 'moving',
-    battery: Math.max(0, robot.battery - 0.5),
   };
 
   if (sameCell(moved.position, taskTarget(moved))) {
-    if (moved.rescueFromPosition) {
+    if (moved.state === 'goingToCharge') {
+      moved = enterCharging(moved);
+    } else if (moved.rescueFromPosition) {
       // ── Rescue pickup: arrived at the death position ───────────────────
       // This is NOT a completed task — the coverer is merely picking up the
       // stranded cargo the killed robot was carrying. Switch to dropoff mode
@@ -382,6 +403,12 @@ function advanceRobot(
       // the real dropoff station. DO NOT call advanceTaskAfterArrival (that
       // would phantom-increment tasksCompleted).
       moved = { ...moved, task: 'dropoff', rescueFromPosition: undefined, path: [] };
+    } else if (
+      moved.task === 'pickup' &&
+      stackBoxes &&
+      !hasAvailablePickupBox(moved, stackBoxes)
+    ) {
+      moved = { ...moved, state: 'frozen', path: [] };
     } else {
       moved = advanceTaskAfterArrival(moved, tick);
     }

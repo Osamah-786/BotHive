@@ -82,10 +82,22 @@ function useSimulationLoop() {
             tick: nextTick,
             blockedCells: current.blockedCells,
             killedRobots: current.killedRobots,
+            unresponsiveRobots: current.unresponsiveRobots,
           });
 
-          current.setTraditionalState(traditional.robots, traditional.metrics);
-          current.setProposedState(proposed.robots, proposed.metrics, proposed.p2pLinks);
+          current.setTraditionalState(
+            traditional.robots,
+            traditional.metrics,
+            traditional.remainingBoxes,
+            traditional.stackBoxes,
+          );
+          current.setProposedState(
+            proposed.robots,
+            proposed.metrics,
+            proposed.remainingBoxes,
+            proposed.stackBoxes,
+            proposed.p2pLinks,
+          );
           current.setTick(nextTick);
         }
       } else {

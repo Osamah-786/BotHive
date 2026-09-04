@@ -308,7 +308,7 @@ export function createAMR(
 
         const box = scene.add.graphics();
 
-        // Front of box
+        // One unmistakable carton.
         box.fillStyle(0xc98b45, 1);
 
         box.fillRect(
@@ -318,33 +318,6 @@ export function createAMR(
             58
         );
 
-        // Top
-        box.fillStyle(0xf2c36d, 1);
-
-        box.beginPath();
-
-        box.moveTo(0, -65);
-        box.lineTo(18, -78);
-        box.lineTo(100, -78);
-        box.lineTo(82, -65);
-
-        box.closePath();
-        box.fillPath();
-
-        // Right side
-        box.fillStyle(0xa96b35, 1);
-
-        box.beginPath();
-
-        box.moveTo(82, -65);
-        box.lineTo(100, -78);
-        box.lineTo(100, -20);
-        box.lineTo(82, -7);
-
-        box.closePath();
-        box.fillPath();
-
-        // Tape
         box.fillStyle(0xdba65b, 1);
 
         box.fillRect(
@@ -354,18 +327,17 @@ export function createAMR(
             58
         );
 
-        // Horizontal seam
         box.lineStyle(
-            2,
+            2.5,
             0x8e5a2e,
             1
         );
 
-        box.lineBetween(
+        box.strokeRect(
             0,
-            -35,
+            -65,
             82,
-            -35
+            58
         );
 
         // Pallet

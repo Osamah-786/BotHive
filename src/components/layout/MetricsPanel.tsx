@@ -10,7 +10,7 @@ import {
 import { Activity, Battery, Gauge, RadioTower, ShieldCheck } from 'lucide-react';
 import { useSimStore } from '../../store/useSimStore';
 import type { MetricsSnapshot, Robot, SimMetrics } from '../../engine/types';
-import { BASE_TICK_MS } from '../../engine/simulation';
+import { BASE_TICK_MS, ENERGY_PER_TASK, MAX_TASKS } from '../../engine/simulation';
 import { MetricCard } from '../ui/MetricCard';
 
 type ChartDatum = {
@@ -189,15 +189,16 @@ function PanelHeading({ icon: Icon, title, detail }: { icon: typeof Activity; ti
 function RobotHealthRow({ robot }: { robot: Robot }) {
   const batteryColor = robot.battery < 25 ? '#f15b5b' : robot.battery < 50 ? '#f2c14e' : MESH;
   const target = `${robot.task === 'pickup' ? 'P' : 'D'}${robot.stationIndex + 1}`;
+  const remainingTasks = Math.max(0, Math.min(MAX_TASKS, Math.floor((robot.battery + 0.0001) / ENERGY_PER_TASK)));
   return (
     <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_4.4rem] items-center gap-3 border border-[#244446] bg-[#091d1e] px-2.5 py-2">
       <span className="font-mono text-[10px] font-bold" style={{ color: robot.color }}>{robot.id}</span>
       <div className="min-w-0">
         <div className="mb-1 flex items-center justify-between gap-2 font-mono text-[8px] tracking-[0.08em] uppercase">
           <span className="text-[#86aaa4]">Target {target} · {robot.path.length} cells</span>
-          <span style={{ color: batteryColor }}>{Math.round(robot.battery)}%</span>
+          <span style={{ color: batteryColor }}>{robot.battery.toFixed(2)}% · {robot.tasksCompleted} done · {remainingTasks} left</span>
         </div>
-        <div className="h-1 overflow-hidden bg-[#173738]" aria-label={`${robot.id} battery ${Math.round(robot.battery)} percent`}>
+        <div className="h-1 overflow-hidden bg-[#173738]" aria-label={`${robot.id} battery ${robot.battery.toFixed(2)} percent`}>
           <div className="h-full transition-[width] duration-200" style={{ width: `${robot.battery}%`, background: batteryColor }} />
         </div>
       </div>
