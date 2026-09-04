@@ -46,17 +46,23 @@ EDGE FLEET models AMRs moving boxes through a warehouse and provides a direct co
 - Each successful delivery consumes **10%** battery (`100 / MAX_TASKS`). Movement and recovery progress do not consume battery.
 - At or below the **20%** threshold, a robot on the pickup leg diverts to charge before another pickup.
 - Charging is automatic, targets **100%**, and adds **10 percentage points per simulation tick**.
-- The current task is preserved while the robot travels to, waits for, or occupies a charger.
-- **Battery -** controls reduce a selected robot by 10 percentage points to test this behavior.
+- The current task and station assignment are preserved while the robot travels to, waits for, or occupies a charger.
+- `goingToCharge` state is preserved while traveling cell-by-cell to the charger (preventing movement resolution from overwriting state), cleanly transitioning to `charging` upon arrival at `C1` or `C2`.
+- **Battery -** controls reduce a selected robot's battery by 10 percentage points manually so automatic charging behavior can be tested and demonstrated.
 
-## Charging Stations
+## Charging Stations & UI Notifications
 
 - There are two stations, `C1` and `C2`.
 - Automatic charger selection uses the existing A* pathfinder and chooses the shortest available route.
-- A reservation is held while a robot is going to or occupying a station; only one robot may reserve each station.
+- A reservation is held while a robot is going to or occupying a station; only one robot may reserve each station (`reservedChargingStations`).
 - If both stations are occupied, a low-battery robot waits and retries on later ticks.
 - The reservation is released when charging reaches 100% and the robot leaves charging.
 - Killed and failed robots do not hold reservations.
+- **Charging UI Notification**: When a robot is actively in `charging` state, a floating light-green notification overlay appears in the top-right of the active warehouse view:
+  - Displays electric `⚡` indicator icon, robot ID (colored), `CHARGING` status, live battery %, and assigned charger label (`C1`/`C2`).
+  - Active strictly when `robot.state === 'charging'` (does not render while merely `goingToCharge`).
+  - Automatically disappears when charging completes at 100% or state leaves `charging`.
+  - Supports multiple robots charging simultaneously.
 
 ## Navigation & Collision Avoidance
 
@@ -64,13 +70,16 @@ EDGE FLEET models AMRs moving boxes through a warehouse and provides a direct co
 - Shelves, manually blocked cells, and failed or killed robots are impassable to ordinary navigation.
 - The shared collision resolver prevents same-cell moves and direct cell swaps.
 - Traditional uses a one-step horizon, static priority (`R1` before `R2` before `R3`), stop-and-wait conflicts, and no local reroute around a newly blocked aisle until its centralized route refreshes.
-- Proposed predicts conflicts up to three steps ahead, compares urgency -> battery -> oldest task -> robot ID, and can choose cooperative moves or reroute around reservations.
+- Proposed predicts conflicts up to three steps ahead, compares priority in the order `urgency -> battery -> timestamp (oldest task) -> robot ID`, and can choose cooperative moves or reroute around reservations.
 - **ORCA is not implemented.** Proposed movement uses the repository's cooperative reservation and A* rerouting logic.
 
 ## Dashboard / Chaos Controls
 
+- **Compact Metrics Panel Layout**:
+  - The trend chart card uses contained relative positioning (`relative`) to isolate tooltip interactions and has a compact `h-[140px]` height setting in full-page mode to prevent dashboard layout spilling.
+  - Robot Health status list uses flexible grid column layout (`grid-cols-[2.25rem_minmax(0,1fr)_auto]`) with compact padding (`py-1.5`, `space-y-1.5`), ensuring all 3 robots (**R1**, **R2**, **R3**) remain fully represented and visible without vertical clipping.
 - **KILL**, **ALIVE**, and **SILENCE** provide individual robot failure and heartbeat controls.
-- **Battery -** provides low-battery testing.
+- **Battery -** is a testing/debug control that manually decreases a robot's battery by 10% to trigger and demonstrate automatic charging.
 - **Block aisle** toggles a dynamic obstacle at the demo aisle; floor-cell interaction is also supported by the warehouse view where available.
 - **Cloud lag** changes centralized planner refresh intervals from 20 ms to 2000 ms and does not delay Proposed.
 - **Kill cloud** freezes Traditional; restoring the cloud lets it continue. Proposed is independent of this simulated flag.

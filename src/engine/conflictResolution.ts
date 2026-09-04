@@ -383,13 +383,18 @@ function advanceRobot(
   stackBoxes?: number[],
 ): Robot {
   const next = route[0];
-  if (!next || blockedCells.has(cellKey(next))) return waitRobot(robot, false);
+  if (!next || blockedCells.has(cellKey(next))) {
+    if (robot.state === 'goingToCharge' && sameCell(robot.position, taskTarget(robot))) {
+      return enterCharging(robot);
+    }
+    return waitRobot(robot, false);
+  }
 
   let moved: Robot = {
     ...robot,
     position: { ...next },
     path: route.slice(1),
-    state: 'moving',
+    state: robot.state === 'goingToCharge' ? 'goingToCharge' : 'moving',
   };
 
   if (sameCell(moved.position, taskTarget(moved))) {

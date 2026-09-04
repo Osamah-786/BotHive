@@ -10,7 +10,7 @@
 | Item | Status |
 |---|---|
 | Vite + React + TS scaffold | ✅ Done |
-| Dependencies installed | ✅ R3F, drei, three, zustand, recharts all installed |
+| Dependencies installed | ✅ Phaser 4, Zustand, Recharts, shadcn/ui, Tailwind CSS all installed |
 | shadcn/ui configured | ✅ `components.json` present |
 | `src/engine/types.ts` | ✅ Done |
 | `src/engine/warehouse.ts` | ✅ Done |
@@ -26,13 +26,15 @@
 | Simulation clock + robot interpolation | ✅ Done — 200 ms base tick with rAF loop |
 | `src/components/layout/Header.tsx` | ✅ Done — controls + chaos console |
 | `src/components/simulation/ObstacleMesh.tsx` | ✅ Done — pulsing blocked-aisle marker |
-| `src/components/simulation/ObstacleMesh.tsx` | ✅ Done — pulsing blocked-aisle marker |
 | `src/components/layout/MetricsPanel.tsx` | ✅ Done — 3 live Recharts charts |
 | `src/components/ui/MetricCard.tsx` | ✅ Done — cloud vs P2P paired readout |
 | `src/components/simulation/P2PLines.tsx` | ✅ Done — animated green mesh lines |
 | `src/styles/globals.css` | ✅ Done — scrollbar, focus ring, keyframes |
-| Robot battery recharge | ✅ Done — recharges to 100% on dropoff completion |
-| Station labels (P1–D3) | ✅ Done — drei `<Text>` on pickup/dropoff tiles |
+| Automatic robot charging | ✅ Done — automatic charging at C1/C2 when battery ≤ 20% (10% drain per delivery, 100% capacity = 10 deliveries) |
+| Charging movement state fix | ✅ Done — `goingToCharge` state preserved during move resolution; cleanly transitions to `charging` at C1/C2 |
+| Top-right charging UI popup | ✅ Done — floating light-green overlay notification (`⚡ R1 CHARGING (20%) C1`) in SplitView.tsx |
+| Dashboard & Robot Health layout | ✅ Done — compact trend chart height (`h-[140px]`), Tooltip containment (`relative`), flexible grid fitting all 3 robots (R1–R3) |
+| Station labels (P1–D3, C1–C2) | ✅ Done — station indicators on warehouse grid |
 | Robot task-ring indicator | ✅ Done — amber=pickup, orange=dropoff ring |
 
 ---
@@ -88,15 +90,15 @@ src/engine/astar.ts
 ### Tasks
 
 - [ ] **2.1** Create `src/store/useSimStore.ts` — Zustand store (static initial state only, no actions yet)
-- [ ] **2.2** Create `src/components/simulation/WarehouseGrid.tsx` — R3F tile renderer
+- [ ] **2.2** Create `src/components/simulation/WarehouseGrid.tsx` — tile renderer
 - [ ] **2.3** Create `src/components/simulation/RobotMesh.tsx` — colored box + floating label
-- [ ] **2.4** Create `src/components/simulation/WarehouseCanvas.tsx` — R3F Canvas wrapper with orthographic camera
+- [ ] **2.4** Create `src/components/simulation/WarehouseCanvas.tsx` — Phaser 4 canvas wrapper
 - [ ] **2.5** Create `src/components/layout/SplitView.tsx` — two canvases side by side
 - [ ] **2.6** Wire `App.tsx` to render `SplitView`
 
 ### Key Design Decisions
-- Camera: `OrthographicCamera` (top-down), from `@react-three/drei`
-- Grid tiles: `<mesh>` with `<planeGeometry>` or `<boxGeometry>`, positioned by `x * TILE_SIZE, y * TILE_SIZE`
+- Camera: Top-down orthographic camera in Phaser 4 view
+- Grid tiles: Rendered via Phaser 4 tilemap/graphics, positioned by `x * TILE_SIZE, y * TILE_SIZE`
 - Tile colors: Follow warehouse-tone palette from the plan
 
 ### Files to create/modify
@@ -128,7 +130,7 @@ src/App.tsx                                    (modify)
 
 ### Key Design Decisions
 - **Traditional**: cloud planner runs every N ticks; lower robot ID = higher static priority
-- **Proposed**: each robot has `urgency > battery > timestamp` priority chain
+- **Proposed**: each robot has `urgency > battery > timestamp > robot ID` priority chain
 - **Lerp**: robots visually interpolate between cells over one tick duration (avoids teleporting)
 - `BASE_TICK_MS = 200ms` at 1×
 
@@ -235,7 +237,8 @@ src/styles/globals.css                     (modify)
 | #4 | 2026-08-26 | 3 | Added both tick engines, the fixed-step rAF loop, smooth robot movement, and phase validation. |
 | #5 | 2026-08-26 | 4 | Added simulation controls, the chaos console, blocked-aisle markers, and verified all fault scenarios. |
 | #6 | 2026-08-26 | 4 fix | Centralized cloud routes now remain stale after an aisle block, so affected robots wait until it is cleared. |
-| #7 | 2026-08-26 | 5 | MetricCard + MetricsPanel (3 live Recharts), P2PLines animation, CENTRALIZED/DECENTRALIZED banners, path-preview dots, battery recharge on dropoff, station labels (P1–D3) via drei Text, task-ring indicator on robots, and globals.css with scrollbar/focus/keyframes. Build: ✅ |
+| #7 | 2026-08-26 | 5 | MetricCard + MetricsPanel (3 live Recharts), P2PLines animation, CENTRALIZED/DECENTRALIZED banners, path-preview dots, automatic charging at C1/C2 (10% drain per delivery), station labels (P1–D3, C1–C2), task-ring indicator on robots, Phaser 4 warehouse rendering, and globals.css with scrollbar/focus/keyframes. Build: ✅ |
+| #8 | 2026-09-04 | 5 fix | Fixed MetricsPanel layout (compact h-[140px] chart, Tooltip isolation via relative, flexible status grid fitting R1–R3 without row clipping), fixed `goingToCharge` state preservation during move resolution in conflictResolution.ts, verified charger reservations (C1/C2), and added top-right light-green charging UI overlay notification (`⚡ R1 CHARGING (20%) C1`). Build: ✅ |
 
 ---
 

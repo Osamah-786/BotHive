@@ -14,7 +14,7 @@ Build a **web-based side-by-side split-screen simulation** that empirically prov
 | Layer | Choice | Reason |
 |---|---|---|
 | Framework | **React + Vite + TypeScript** | Modern, fast, type-safe |
-| 3D/2D Rendering | **React-Three-Fiber (R3F) + @react-three/drei** | Idiomatic React + Three.js, top-down 2D grid |
+| 3D/2D Rendering | **Phaser 4** | Lightweight 2D canvas warehouse renderer |
 | State Management | **Zustand** | Lightweight, handles high-frequency simulation ticks |
 | Charts | **Recharts** | React-native, easy live metric updates |
 | UI Components | **shadcn/ui + Tailwind CSS** | Pre-built accessible components, utility-first styling |
@@ -38,7 +38,7 @@ Build a **web-based side-by-side split-screen simulation** that empirically prov
 │           ┌────────────────┐          ┌─────────────────┐         │
 │           │ Traditional    │          │  Proposed (P2P) │         │
 │           │ (Centralized)  │          │  (Decentralized)│         │
-│           │   R3F Canvas   │          │    R3F Canvas   │         │
+│           │ Phaser Canvas  │          │  Phaser Canvas  │         │
 │           └────────────────┘          └─────────────────┘         │
 └──────────────────────────────────────────────────────────────────┘
                                 │
@@ -81,9 +81,9 @@ amr-final/
     │   │   │   └── MetricsPanel.tsx   # Recharts live metric charts
     │   │   │
     │   │   ├── simulation/
-    │   │   │   ├── WarehouseCanvas.tsx   # R3F Canvas for one side
+    │   │   │   ├── WarehouseCanvas.tsx   # Phaser 4 Canvas wrapper for one side
     │   │   │   ├── WarehouseGrid.tsx     # Tile grid renderer (floor, shelves, stations)
-    │   │   │   ├── RobotMesh.tsx         # Individual robot 3D mesh + label
+    │   │   │   ├── RobotMesh.tsx         # Individual robot renderer + label
     │   │   │   ├── ObstacleMesh.tsx      # Blocked aisle obstacle box
     │   │   │   └── P2PLines.tsx          # Green P2P connection lines (Proposed side only)
     │   │   │
@@ -143,11 +143,13 @@ Example grid (schematic):
 | AMR 2 | Green 🟢 | Pickup-2 → Dropoff-2 → cycle |
 | AMR 3 | Yellow 🟡 | Pickup-3 → Dropoff-3 → cycle |
 
-- All robots start at their pickup station
-- Each robot cycles its task indefinitely (continuous operation)
-- Robots have a `battery` attribute (starts at 100%, drains slowly — used in priority calculation)
+- All robots start at their assigned pickup station
+- **Single-box rule**: Each robot carries at most **ONE** box at a time (`pickup -> carry -> dropoff`).
+- **Finite workload**: 3 pickup stacks with 2 boxes per stack (6 total boxes in warehouse). Robots freeze/stop when available work is exhausted.
+- **Battery & Automatic Charging**: Starts at 100%. `MAX_TASKS = 10` is a per-robot capacity guard where each delivery consumes 10% battery (`100 / MAX_TASKS`). At or below 20%, the robot automatically routes to charging station `C1` or `C2` via A*. `goingToCharge` state is preserved while traveling cell-by-cell to the charger and cleanly transitions to `charging` upon arrival. Charging adds +10% per tick up to 100%, holding a charger reservation (`reservedChargingStations`) during travel and charging, then resumes its preserved task assignment.
+- **Charging UI Notification**: A floating light-green overlay notification appears in the top-right of the active warehouse view (`⚡ R1 CHARGING (20%) C1`) while `robot.state === 'charging'` (does not appear while `goingToCharge`) and automatically disappears when charging finishes at 100%.
 - Each robot renders with:
-  - A colored circle/box mesh
+  - A colored circle/box sprite
   - A floating label with ID + battery %
   - A faint path-preview line (dots) showing A* route ahead
 
@@ -158,7 +160,7 @@ Example grid (schematic):
 ### Shared Types (`engine/types.ts`)
 
 ```typescript
-type CellType = 'floor' | 'shelf' | 'pickup' | 'dropoff' | 'blocked';
+type CellType = 'floor' | 'shelf' | 'pickup' | 'dropoff' | 'charging' | 'blocked';
 
 interface Cell {
   x: number; y: number;
@@ -174,7 +176,7 @@ interface Robot {
   battery: number;                        // 0-100
   urgency: number;                        // 0-1, set per task
   timestamp: number;                      // task start epoch ms
-  state: 'moving' | 'waiting' | 'frozen'; // 'frozen' only on Traditional when cloud killed
+  state: 'moving' | 'waiting' | 'frozen' | 'goingToCharge' | 'charging' | 'failed' | 'killed';
   conflictsResolved: number;
   idleTime: number;                       // accumulated ticks waiting
   tasksCompleted: number;
@@ -225,7 +227,7 @@ for each tick:
 2. Every tick, each robot **broadcasts** its `{position, velocity, path, priority}` state to all peers
 3. **Conflict resolution (Priority Token Protocol)**:
    - Both robots check if paths conflict in space AND time (will they occupy the same cell within the next 3 steps?)
-   - If conflict detected → compare priority: `urgency > battery > timestamp`
+   - If conflict detected → compare priority: `urgency > battery > timestamp (oldest task) > robot ID`
    - Higher-priority robot: **reserves the choke point** (token/lock) and proceeds
    - Lower-priority robot: **yields** — waits one tick, or replans an alternate route via A*
    - Winner releases the lock → waiting robot proceeds
@@ -257,18 +259,25 @@ Right-side panel (or top toolbar):
 
 | Control | Traditional Effect | Proposed Effect |
 |---|---|---|
+| **KILL** | Robot freezes immediately in place (`state = 'killed'`). Retains unfinished task. Task is inherited by peer. Acts as dynamic obstacle. | Same behavior. Peer detects failure and inherits task; if carrying cargo, coverer performs cargo rescue. |
+| **SILENCE** | N/A (Traditional has no heartbeats) | Stops simulated heartbeats for selected robot. Peers mark it `suspected` (2 ticks) then `failed` (5 ticks) and trigger task recovery. |
+| **ALIVE** | Re-activates killed robot (`state = 'moving'`). | Re-activates killed/silenced robot (`state = 'moving'`). Work already owned by coverer remains protected until handoff. |
+| **Battery -** | Manually decreases selected robot's battery by 10% for testing/debugging automatic charging. | Same behavior. At/below 20%, robot diverts to charging station (`C1`/`C2`). |
 | **Kill Cloud WiFi** | All 3 robots freeze immediately (`state = 'frozen'`). Idle time counter spikes. | Zero effect — robots continue P2P coordination |
-| **Block Aisle** (click on grid) | Robot approaching blocked aisle stops and waits forever (no cloud to replan) | Robot(s) detect block via P2P broadcast, immediately replan alternate A* route |
-| **Latency Slider** (20ms – 2000ms) | Increases delay before cloud planner responds → slower reactions, more collisions | Minor effect only (slight message delay) — not in critical control loop |
+| **Block Aisle** (click on grid) | Robot approaching blocked aisle stops and waits at blocked waypoint until cleared. | Robot(s) detect block via P2P broadcast, immediately replan alternate A* route |
+| **Latency Slider** (20ms – 2000ms) | Increases delay before cloud planner responds → slower reactions, more wait time | Zero effect on Proposed control loop |
 
 > [!IMPORTANT]
 > "Kill Cloud WiFi" is the single most powerful demo moment — Traditional side freezes, Proposed continues. Lead with this in the judging demo.
 
 ---
 
-## 📊 Live Metrics Panel
+## 📊 Live Metrics Panel & Dashboard Layout
 
 Three **live updating Recharts line charts** below the simulation views:
+
+- **Compact Layout**: The TrendChart card uses `relative` positioning to contain Recharts Tooltip hover bounds, and full-page mode operates at `h-[140px]` height to avoid vertical overflow.
+- **Robot Health List**: Formatted with compact `py-1.5` padding, `space-y-1.5` gap, and flexible status grid (`grid-cols-[2.25rem_minmax(0,1fr)_auto]`) so all three robots (**R1**, **R2**, **R3**) remain fully represented and visible.
 
 ### Chart 1 — Total Task Completion Time (Line Chart)
 - X-axis: Simulation time (ticks)
@@ -340,7 +349,7 @@ requestAnimationFrame loop:
 - `BASE_TICK_MS` = 200ms (5 ticks/sec at 1×)
 - Speed 2× → 100ms between ticks
 - Speed 4× → 50ms between ticks
-- R3F renders at display refresh rate (60fps); robot positions lerp smoothly between grid steps
+- Phaser renders at display refresh rate; robot positions lerp smoothly between grid steps
 
 ---
 
@@ -389,15 +398,15 @@ interface SimStore {
 
 ### Phase 1 — Foundation (Day 1)
 - [ ] Scaffold Vite + React + TypeScript project
-- [ ] Install all dependencies (R3F, drei, Zustand, Recharts, shadcn/ui, Tailwind)
+- [ ] Install all dependencies (Phaser 4, Zustand, Recharts, shadcn/ui, Tailwind)
 - [ ] Build `engine/types.ts` and `engine/warehouse.ts` (grid layout)
 - [ ] Implement `engine/astar.ts` — test with unit tests
 
 ### Phase 2 — Rendering (Day 1–2)
-- [ ] Build `WarehouseGrid.tsx` — render tile grid in R3F with warehouse-tone colors
+- [ ] Build `WarehouseGrid.tsx` — render tile grid in Phaser 4 with warehouse-tone colors
 - [ ] Build `RobotMesh.tsx` — colored box + floating label
-- [ ] Build `SplitView.tsx` — two R3F canvases side by side
-- [ ] Add top-down orthographic camera in R3F
+- [ ] Build `SplitView.tsx` — two Phaser canvases side by side
+- [ ] Add top-down orthographic camera in Phaser 4
 
 ### Phase 3 — Simulation Logic (Day 2–3)
 - [ ] Implement `engine/traditional.ts` — stop-and-wait, centralized planner, latency simulation
@@ -414,7 +423,7 @@ interface SimStore {
 ### Phase 5 — Metrics & Polish (Day 4)
 - [ ] Build `MetricsPanel.tsx` with 3 Recharts charts
 - [ ] Build `MetricCard.tsx` summary cards
-- [ ] Build `P2PLines.tsx` — green R3F lines for active P2P comms
+- [ ] Build `P2PLines.tsx` — green mesh lines for active P2P comms
 - [ ] Apply warehouse-tone theme across all components
 - [ ] Add "CENTRALIZED" and "DECENTRALIZED P2P" banners on each side
 - [ ] Add robot path preview dots
@@ -432,21 +441,18 @@ interface SimStore {
 ```json
 {
   "dependencies": {
-    "react": "^18",
-    "react-dom": "^18",
-    "@react-three/fiber": "^8",
-    "@react-three/drei": "^9",
-    "three": "^0.165",
-    "zustand": "^4",
-    "recharts": "^2",
-    "tailwindcss": "^3",
-    "clsx": "^2"
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "phaser": "^4.2.1",
+    "zustand": "^5.0.15",
+    "recharts": "3.8.0",
+    "tailwindcss": "^4",
+    "clsx": "^2.1.1"
   },
   "devDependencies": {
-    "vite": "^5",
-    "@vitejs/plugin-react": "^4",
-    "typescript": "^5",
-    "@types/three": "^0.165"
+    "vite": "^8",
+    "@vitejs/plugin-react": "^6",
+    "typescript": "~6"
   }
 }
 ```

@@ -116,7 +116,7 @@ function DispatchDesk({ tick, cloudRobots, meshRobots, cloudMetrics, meshMetrics
     <div className="grid gap-px bg-[#244446] xl:grid-cols-[1.25fr_1fr]">
       <article className="bg-[#0c2021] px-4 py-3">
         <PanelHeading icon={Battery} title="Robot health" detail="P2P fleet · live battery and route load" />
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 space-y-1.5">
           {meshRobots.map((robot) => (
             <RobotHealthRow key={robot.id} robot={robot} />
           ))}
@@ -191,11 +191,11 @@ function RobotHealthRow({ robot }: { robot: Robot }) {
   const target = `${robot.task === 'pickup' ? 'P' : 'D'}${robot.stationIndex + 1}`;
   const remainingTasks = Math.max(0, Math.min(MAX_TASKS, Math.floor((robot.battery + 0.0001) / ENERGY_PER_TASK)));
   return (
-    <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_4.4rem] items-center gap-3 border border-[#244446] bg-[#091d1e] px-2.5 py-2">
+    <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 border border-[#244446] bg-[#091d1e] px-2.5 py-1.5">
       <span className="font-mono text-[10px] font-bold" style={{ color: robot.color }}>{robot.id}</span>
       <div className="min-w-0">
         <div className="mb-1 flex items-center justify-between gap-2 font-mono text-[8px] tracking-[0.08em] uppercase">
-          <span className="text-[#86aaa4]">Target {target} · {robot.path.length} cells</span>
+          <span className="truncate text-[#86aaa4]">Target {target} · {robot.path.length} cells</span>
           <span style={{ color: batteryColor }}>{robot.battery.toFixed(2)}% · {robot.tasksCompleted} done · {remainingTasks} left</span>
         </div>
         <div className="h-1 overflow-hidden bg-[#173738]" aria-label={`${robot.id} battery ${robot.battery.toFixed(2)} percent`}>
@@ -282,7 +282,7 @@ function TrendChart({ title, data, cloudKey, meshKey, kind, fullPage }: TrendCha
   };
 
   return (
-    <article className="min-w-0 bg-[#0c2021] px-2.5 py-2 flex flex-col">
+    <article className="relative min-w-0 bg-[#0c2021] px-2.5 py-2 flex flex-col">
       <div className="flex flex-shrink-0 items-center justify-between gap-2">
         <h3 className="truncate font-mono text-[9px] font-bold tracking-[0.1em] text-[#86aaa4] uppercase">{title}</h3>
         <div className="flex items-center gap-1.5" aria-label="Cloud red, P2P green">
@@ -290,17 +290,17 @@ function TrendChart({ title, data, cloudKey, meshKey, kind, fullPage }: TrendCha
           <i className="h-1.5 w-1.5 rounded-full bg-[#51d38d]" />
         </div>
       </div>
-      <div className={`mt-1 min-w-0 flex-1 ${fullPage ? 'min-h-[200px]' : 'h-[132px]'}`}>
+      <div className={`relative mt-1 min-w-0 w-full ${fullPage ? 'h-[140px]' : 'h-[132px]'}`}>
         <ResponsiveContainer width="100%" height="100%">
           {kind === 'area' ? (
             <AreaChart data={data} margin={{ top: 8, right: 2, bottom: 0, left: 2 }}>
-              <Tooltip content={CompactTooltip} contentStyle={tooltipStyle} />
+              <Tooltip content={CompactTooltip} contentStyle={tooltipStyle} wrapperStyle={{ pointerEvents: 'none' }} />
               <Area type="monotone" dataKey={cloudKey} stroke={CLOUD} fill={CLOUD} fillOpacity={0.12} strokeWidth={1.5} isAnimationActive={false} />
               <Area type="monotone" dataKey={meshKey} stroke={MESH} fill={MESH} fillOpacity={0.1} strokeWidth={1.5} isAnimationActive={false} />
             </AreaChart>
           ) : (
             <LineChart data={data} margin={{ top: 8, right: 2, bottom: 0, left: 2 }}>
-              <Tooltip content={CompactTooltip} contentStyle={tooltipStyle} />
+              <Tooltip content={CompactTooltip} contentStyle={tooltipStyle} wrapperStyle={{ pointerEvents: 'none' }} />
               <Line type="monotone" dataKey={cloudKey} stroke={CLOUD} strokeWidth={1.8} dot={false} isAnimationActive={false} />
               <Line type="monotone" dataKey={meshKey} stroke={MESH} strokeWidth={1.8} dot={false} isAnimationActive={false} />
             </LineChart>

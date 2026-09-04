@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Cloud, Network } from 'lucide-react';
+import { Cloud, Network, Zap } from 'lucide-react';
 import { WarehouseCanvas } from '../simulation/WarehouseCanvas';
+import { useSimStore } from '../../store/useSimStore';
 
 type View = 'traditional' | 'proposed';
 
@@ -16,6 +17,8 @@ const VIEWS: Record<View, { label: string; detail: string; color: string; Icon: 
 export function SplitView() {
   const [activeView, setActiveView] = useState<View>('traditional');
   const active = VIEWS[activeView];
+  const robots = useSimStore((state) => (activeView === 'traditional' ? state.traditional.robots : state.proposed.robots));
+  const chargingRobots = robots.filter((robot) => robot.state === 'charging');
 
   return (
     <section className="flex h-full w-full flex-col bg-[#071617]" aria-label="Warehouse strategy viewer">
@@ -53,8 +56,27 @@ export function SplitView() {
         </div>
       </div>
 
-      <div id={`${activeView}-panel`} role="tabpanel" aria-labelledby={`${activeView}-tab`} className="min-h-0 flex-1">
+      <div id={`${activeView}-panel`} role="tabpanel" aria-labelledby={`${activeView}-tab`} className="relative min-h-0 flex-1">
         <WarehouseCanvas side={activeView} />
+
+        {chargingRobots.length > 0 && (
+          <div className="pointer-events-none absolute top-3 right-3 z-30 flex flex-col gap-1.5" aria-label="Charging notifications">
+            {chargingRobots.map((robot) => (
+              <div
+                key={robot.id}
+                className="flex items-center gap-2 border border-[#51d38d] bg-[#07241c]/90 px-3 py-1.5 font-mono text-[10px] font-bold text-[#87eab5] shadow-lg backdrop-blur-sm animate-pulse"
+              >
+                <Zap size={13} className="shrink-0 text-[#f2c14e]" aria-hidden="true" />
+                <span style={{ color: robot.color }}>{robot.id}</span>
+                <span>CHARGING</span>
+                <span className="text-[#86aaa4]">({Math.round(robot.battery)}%)</span>
+                <span className="text-[8px] font-bold tracking-wider text-[#51d38d] uppercase">
+                  C{(robot.chargingStationIndex ?? 0) + 1}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
