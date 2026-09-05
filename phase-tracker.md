@@ -42,7 +42,8 @@
 | Warehouse power outage — engine | ✅ Done — `warehousePower` Zustand boolean → `powerOutage` flag passed to `traditionalTick` and `proposedTick`; C1/C2 unavailable while off; robots in `goingToCharge` enter `waiting`; robots in `charging` stop gaining battery; state/position/battery preserved |
 | Warehouse power outage — visual | ✅ Done — dim dark `powerOverlay` + reduced station alpha rendered in Phaser scene (`renderPowerState`) |
 | Power outage UI banner | ✅ Done — pulsing `WAREHOUSE POWER OFF / C1/C2 unavailable / Robots in power-saving mode` overlay in SplitView.tsx top-right, shown only during outage |
-| Return-to-start behavior | 🔲 Not yet implemented |
+| Return-to-start behavior | ✅ Done — completed robots route to their original pickup positions, then freeze |
+| Prototype authentication | ✅ Done — `/login`, `/signup`, protected `/` and `/dashboard`, sessionStorage session, admin/user roles, admin-only Add Admin, and logout |
 
 ---
 
@@ -210,6 +211,8 @@ src/engine/proposed.ts               (modify — respect blockedCells)
 - [x] **5.8** Apply the current light industrial visual treatment and correct dashboard/chart/fleet sizing
 - [x] **5.9** Keep C1/C2 visual rendering aligned with logical charging coordinates
 - [x] **5.10** Simplify carrying cargo artwork to one visible box
+- [x] **5.11** Implement warehouse power outage controls, charging pause behavior, dimmed rendering, and outage notification
+- [x] **5.12** Add client-side demo authentication, protected routes, role display, admin creation, and logout
 
 ### Files to create/modify
 ```
@@ -251,6 +254,7 @@ src/styles/globals.css                     (modify)
 | #8 | 2026-09-04 | 5 fix | Fixed MetricsPanel layout (compact h-[140px] chart, Tooltip isolation via relative, flexible status grid fitting R1–R3 without row clipping), fixed `goingToCharge` state preservation during move resolution in conflictResolution.ts, verified charger reservations (C1/C2), and added top-right light-green charging UI overlay notification (`⚡ R1 CHARGING (20%) C1`). Build: ✅ |
 | #9 | 2026-09-05 | 5 polish | Updated the light industrial 2.5D simulation/dashboard presentation, synchronized rendered C1/C2 positions with logical charging cells, and simplified carrying artwork to one clearly identifiable box. Typecheck, build, and diff validation: ✅ |
 | #10 | 2026-09-05 | 4+5 feature | Implemented warehouse power outage: `warehousePower` Zustand boolean → `powerOutage` flag passed to `traditionalTick` and `proposedTick`; C1/C2 unavailable during outage; `goingToCharge` robots enter waiting; `charging` robots stop gaining battery; all positions/tasks/battery preserved. Added dim `powerOverlay` and reduced station alpha in Phaser scene (`renderPowerState`). Added pulsing WAREHOUSE POWER OFF banner in SplitView.tsx. Grid power button added to ChaosPanel.tsx. Updated documentation (README.md, amr-simulation-plan.md, phase-tracker.md). |
+| #11 | 2026-09-05 | 4+5 feature | Added return-to-start behavior after work completion and client-side demo authentication with `/login`, `/signup`, protected simulation/dashboard routes, sessionStorage persistence, admin/user roles, admin-only Add Admin, and logout. |
 
 ---
 

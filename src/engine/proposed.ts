@@ -5,11 +5,12 @@ import {
   beginCharging,
   cloneRobot,
   enterCharging,
-  ENERGY_PER_TASK,
+  isWorkFinished,
   LOW_BATTERY_THRESHOLD,
   MAX_TASKS,
   metricsAfterTick,
   navigationBlockedCells,
+  originalHomePosition,
   reservedChargingStations,
   sameCell,
   selectChargingStation,
@@ -226,22 +227,18 @@ function prepareRobot(
         })()
       : { ...source, state: 'waiting', path: [] };
   }
-  if (remainingBoxes <= 0 && source.task === 'pickup' && !source.rescueFromPosition) {
-    return { ...source, state: 'frozen', path: [] };
-  }
-
-  // A reconnected robot whose unfinished task is already covered must remain
-  // parked until recovery ownership is released; otherwise it could duplicate
-  // the coverer's work.
-  if (source.state === 'frozen' && source.tasksCompleted < MAX_TASKS) {
-    return { ...source, path: [] };
-  }
-
-  if (source.tasksCompleted >= MAX_TASKS) {
-    return { ...source, state: 'frozen', path: [], coveringForRobotId: undefined };
-  }
-  if (source.task === 'pickup' && !source.rescueFromPosition && source.battery < ENERGY_PER_TASK) {
-    return { ...source, state: 'frozen', path: [] };
+  if (isWorkFinished(source, remainingBoxes, stackBoxes)) {
+    const home = originalHomePosition(source);
+    if (sameCell(source.position, home)) {
+      return { ...source, state: 'frozen', path: [], coveringForRobotId: undefined };
+    }
+    let robot = cloneRobot(source);
+    robot.coveringForRobotId = undefined;
+    robot.state = 'moving';
+    if (robot.path.length === 0 || !sameCell(robot.path[robot.path.length - 1], home)) {
+      robot.path = aStar(robot.position, home, navigationBlockedCells(robot, blockedCells));
+    }
+    return robot;
   }
 
   let robot = cloneRobot(source);

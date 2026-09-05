@@ -301,6 +301,27 @@ export function createAisle(
                 inventory.lineTo(bx + boxW, by + boxH);
                 inventory.closePath();
                 inventory.fillPath();
+
+                // Subtle dark outline to separate boxes cleanly against light rack backgrounds
+                inventory.lineStyle(1.5, 0x1e1e1e, 0.85);
+
+                inventory.strokeRect(bx, by, boxW, boxH);
+
+                inventory.beginPath();
+                inventory.moveTo(bx, by);
+                inventory.lineTo(bx + topH, by - topH);
+                inventory.lineTo(bx + boxW + topH, by - topH);
+                inventory.lineTo(bx + boxW, by);
+                inventory.closePath();
+                inventory.strokePath();
+
+                inventory.beginPath();
+                inventory.moveTo(bx + boxW, by);
+                inventory.lineTo(bx + boxW + topH, by - topH);
+                inventory.lineTo(bx + boxW + topH, by - topH + boxH);
+                inventory.lineTo(bx + boxW, by + boxH);
+                inventory.closePath();
+                inventory.strokePath();
             }
         }
     }

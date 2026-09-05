@@ -1,25 +1,23 @@
-import { useEffect } from 'react';
-import { Route, Switch } from 'wouter';
+import { useEffect, type ReactNode } from 'react';
+import { Route, Switch, Redirect } from 'wouter';
 import { Header } from './components/layout/Header';
+import { LoginPage } from './components/layout/LoginPage';
 import { MetricsPanel } from './components/layout/MetricsPanel';
 import { SplitView } from './components/layout/SplitView';
 import { proposedTick } from './engine/proposed';
 import { BASE_TICK_MS } from './engine/simulation';
 import { traditionalTick } from './engine/traditional';
 import { useSimStore } from './store/useSimStore';
+import { useAuthStore } from './store/useAuthStore';
 
-/**
- * Root layout:
- *
- *  ┌──────────────────────────────────────────────────┐
- *  │  HEADER BAR  (app title — controls added Phase 4) │
- *  ├─────────────────────┬────────────────────────────┤
- *  │  TRADITIONAL        │  PROPOSED P2P              │  ← SplitView (fills remaining height)
- *  │  (WarehouseCanvas)  │  (WarehouseCanvas)         │
- *  └─────────────────────┴────────────────────────────┘
- *
- * Metrics panel added in Phase 5.
- */
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
+  return <>{children}</>;
+}
+
 export default function App() {
   useSimulationLoop();
 
@@ -31,16 +29,30 @@ export default function App() {
       <Header />
 
       <Switch>
+        <Route path="/login">
+          <LoginPage initialMode="login" />
+        </Route>
+        <Route path="/signup">
+          <LoginPage initialMode="signup" />
+        </Route>
         <Route path="/">
-          {/* ── Main split-screen simulation view ── */}
-          <main className="min-h-0 flex-1">
-            <SplitView />
-          </main>
+          <ProtectedRoute>
+            {/* ── Main split-screen simulation view ── */}
+            <main className="min-h-0 flex-1">
+              <SplitView />
+            </main>
+          </ProtectedRoute>
         </Route>
         <Route path="/dashboard">
-          <main className="min-h-0 flex-1 flex flex-col p-4">
-            <MetricsPanel fullPage />
-          </main>
+          <ProtectedRoute>
+            <main className="min-h-0 flex-1 flex flex-col p-4">
+              <MetricsPanel fullPage />
+            </main>
+          </ProtectedRoute>
+        </Route>
+        {/* Fallback route */}
+        <Route>
+          <Redirect to="/login" />
         </Route>
       </Switch>
     </div>

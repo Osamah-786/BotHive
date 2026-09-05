@@ -36,6 +36,33 @@ export function taskTarget(robot: Robot): GridPos {
   return stations[robot.stationIndex];
 }
 
+/**
+  * Derives the robot's immutable original home starting position from its ID.
+  * R1 -> P1 (PICKUP_STATIONS[0]), R2 -> P2 (PICKUP_STATIONS[1]), R3 -> P3 (PICKUP_STATIONS[2]).
+  */
+export function originalHomePosition(robot: Robot): GridPos {
+  const index = Math.max(0, parseInt(robot.id.replace(/\D/g, ''), 10) - 1);
+  return PICKUP_STATIONS[index] ?? PICKUP_STATIONS[0];
+}
+
+/**
+  * Evaluates whether a robot has completed all active work and should return to start.
+  */
+export function isWorkFinished(
+  robot: Robot,
+  remainingBoxes: number,
+  stackBoxes: number[],
+): boolean {
+  if (robot.rescueFromPosition !== undefined) return false;
+  if (robot.task === 'dropoff') return false;
+  if (robot.tasksCompleted >= MAX_TASKS) return true;
+  if (remainingBoxes <= 0) return true;
+  if (robot.battery < ENERGY_PER_TASK) return true;
+  if (!hasAvailablePickupBox(robot, stackBoxes)) return true;
+  return false;
+}
+
+
 export const LOW_BATTERY_THRESHOLD = 20;
 export const CHARGE_TARGET_BATTERY = 100;
 export const CHARGE_RATE_PER_TICK = 10;
@@ -221,21 +248,7 @@ function consumeTaskEnergy(battery: number): number {
 
 export function advanceTaskAfterArrival(robot: Robot, tick: number): Robot {
   const arrivedAtDropoff = robot.task === 'dropoff';
-  if (arrivedAtDropoff && robot.tasksCompleted >= MAX_TASKS) {
-    return { ...robot, state: 'frozen', path: [], coveringForRobotId: undefined };
-  }
   const newTasksCompleted = robot.tasksCompleted + (arrivedAtDropoff ? 1 : 0);
-
-  if (newTasksCompleted >= MAX_TASKS) {
-    return {
-      ...robot,
-      path: [],
-      tasksCompleted: newTasksCompleted,
-      state: 'frozen',
-      coveringForRobotId: undefined,
-      battery: arrivedAtDropoff ? consumeTaskEnergy(robot.battery) : robot.battery,
-    };
-  }
 
   return {
     ...robot,
@@ -314,7 +327,11 @@ export function finalizeBoxInventory(
       // With no source inventory left, only an in-progress drop-off (or cargo
       // rescue) may continue. Pickup work must not start another cycle.
       const activeDropoff = robot.task === 'dropoff' || robot.rescueFromPosition !== undefined;
-      return activeDropoff ? robot : { ...robot, state: 'frozen', path: [] };
+      if (activeDropoff) return robot;
+      const home = originalHomePosition(robot);
+      return sameCell(robot.position, home)
+        ? { ...robot, state: 'frozen', path: [], coveringForRobotId: undefined }
+        : robot;
     }),
     remainingBoxes: 0,
     stackBoxes: nextStackBoxes,

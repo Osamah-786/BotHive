@@ -20,6 +20,7 @@ EDGE FLEET models AMRs moving boxes through a warehouse and provides a direct co
 - A robot carries one box at a time. A delivery is counted only after confirmed arrival at the dropoff.
 - The simulation view renders a carrying robot with one clearly separated cardboard box; the box is attached while carrying and removed on dropoff.
 - Source inventory starts with two boxes at each pickup stack, six boxes total. When inventory is exhausted, robots may finish existing dropoffs but cannot start another pickup cycle.
+- When all work is complete, robots route back to their original pickup positions and freeze there.
 - The deterministic simulation tick is 200 ms at 1x. Controls provide play/pause, restart, and 0.5x, 1x, 2x, and 4x rates.
 
 ## Task & Inventory Management
@@ -40,6 +41,7 @@ EDGE FLEET models AMRs moving boxes through a warehouse and provides a direct co
 - Eligible robots inherit unfinished tasks from killed or detected-failed peers, selected by route cost, battery, urgency, and robot ID.
 - Failed and killed robots remain at their last cells and are dynamic physical obstacles for navigation and collision resolution.
 - `coveringForRobotId` protects recovery ownership when a failed robot reconnects.
+- Cargo carried by a failed robot is represented as a rescue task: an eligible coverer travels to the failed robot's last position, completes the dropoff, and then resumes normal work.
 
 ## Battery & Energy Management
 
@@ -105,6 +107,15 @@ EDGE FLEET models AMRs moving boxes through a warehouse and provides a direct co
 - **Run/Pause, Restart, and Rate** control the shared clock.
 - The dashboard shows task progress, idle time, conflicts, robot health, route load, charging reservations, and Proposed peer links.
 
+## Authentication (Demo/Prototype)
+
+- `/login` and `/signup` provide email/password login and account creation.
+- `/` (Simulation) and `/dashboard` are protected routes and redirect unauthenticated users to `/login`.
+- Authentication state and locally created accounts persist in `sessionStorage`; there is no backend, database, hashing service, or production session security.
+- Roles are `admin` and `user`. Normal signup always creates a `user`; an authenticated admin can create another admin through **Add Admin**.
+- The header displays the current role and provides **Logout**.
+- This authentication is a client-side demonstration/prototype only and must not be treated as production security.
+
 ## Important Architecture Notes
 
 - React and TypeScript provide the UI; Vite builds it; Zustand owns simulation state.
@@ -124,7 +135,6 @@ EDGE FLEET models AMRs moving boxes through a warehouse and provides a direct co
 - ORCA and physics-based motion are not implemented; movement is grid-cell based.
 - The workload is fixed at six boxes with three fixed pickup/dropoff assignments; there is no external task queue or dynamic warehouse data source.
 - Centralized cloud latency is represented by deterministic refresh intervals, not measured network latency or a remote planner.
-- **Return-to-start** behavior (robots homing to their initial positions after all work is done) is not yet implemented.
 - Deployment, a hosted demo URL, and the planned headless validation script are not part of the current repository workflow.
 
 

@@ -145,9 +145,10 @@ Example grid (schematic):
 
 - All robots start at their assigned pickup station
 - **Single-box rule**: Each robot carries at most **ONE** box at a time (`pickup -> carry -> dropoff`).
-- **Finite workload**: 3 pickup stacks with 2 boxes per stack (6 total boxes in warehouse). Robots freeze/stop when available work is exhausted.
+- **Finite workload**: 3 pickup stacks with 2 boxes per stack (6 total boxes in warehouse). Robots return to their original pickup positions and freeze when available work is exhausted.
 - **Battery & Automatic Charging**: Starts at 100%. `MAX_TASKS = 10` is a per-robot capacity guard where each delivery consumes 10% battery (`100 / MAX_TASKS`). At or below 20%, the robot automatically routes to charging station `C1` or `C2` via A*. `goingToCharge` state is preserved while traveling cell-by-cell to the charger and cleanly transitions to `charging` upon arrival. Charging adds +10% per tick up to 100%, holding a charger reservation (`reservedChargingStations`) during travel and charging, then resumes its preserved task assignment.
 - **Charging UI Notification**: A floating light-green overlay notification appears in the top-right of the active warehouse view (`⚡ R1 CHARGING (20%) C1`) while `robot.state === 'charging'` (does not appear while `goingToCharge`) and automatically disappears when charging finishes at 100%.
+- **Cargo recovery**: If a robot fails while carrying a box, an eligible coverer travels to its last position, recovers the cargo, completes the dropoff, and then resumes normal assignment work.
 - Each robot renders with:
   - A colored circle/box sprite
   - A floating label with ID + battery %
@@ -250,6 +251,17 @@ Located in the **Header** bar:
 | ⏸ Pause | Pause both sides at the same tick |
 | 🔄 Restart | Reset all robots to initial positions, clear metrics |
 | Speed: 0.5× / 1× / 2× / 4× | Multiplier applied to rAF tick rate |
+
+---
+
+## 🔐 Authentication (Implemented Demo/Prototype)
+
+- `/login` and `/signup` use client-side email/password forms.
+- `/` and `/dashboard` are protected by an authentication guard and redirect to `/login` when no session is active.
+- Zustand persists the demo session and locally stored accounts in `sessionStorage`.
+- Roles are `admin` and `user`; normal signup creates `user`, while only an authenticated admin can use the **Add Admin** modal.
+- The header includes role display and logout.
+- This is prototype authentication only: there is no backend, database, password hashing, server-side session validation, or production security boundary.
 
 ---
 
@@ -438,7 +450,8 @@ interface SimStore {
 - [ ] Record a demo GIF for GitHub README
 - [ ] Build for production (`vite build`)
 - [ ] Deploy to Vercel/Netlify for shareable judge link
-- [ ] **Return-to-start** — robots home to their initial positions once all deliveries are done (not yet implemented)
+- [x] **Return-to-start** — robots home to their initial positions once all work is done, then freeze
+- [x] **Authentication prototype** — login/signup, protected routes, sessionStorage persistence, roles, admin creation, and logout
 
 
 ---
