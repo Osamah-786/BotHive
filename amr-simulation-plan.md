@@ -263,12 +263,14 @@ Right-side panel (or top toolbar):
 | **SILENCE** | N/A (Traditional has no heartbeats) | Stops simulated heartbeats for selected robot. Peers mark it `suspected` (2 ticks) then `failed` (5 ticks) and trigger task recovery. |
 | **ALIVE** | Re-activates killed robot (`state = 'moving'`). | Re-activates killed/silenced robot (`state = 'moving'`). Work already owned by coverer remains protected until handoff. |
 | **Battery -** | Manually decreases selected robot's battery by 10% for testing/debugging automatic charging. | Same behavior. At/below 20%, robot diverts to charging station (`C1`/`C2`). |
+| **Grid power** | Toggles warehouse power outage (`warehousePower`). When OFF: `C1`/`C2` unavailable, robots en route to charge enter waiting mode, robots actively charging stop gaining battery, warehouse dims visually, UI banner shown. Power restoration resumes charging. | Same behavior — `powerOutage` flag is passed identically to both engines. |
 | **Kill Cloud WiFi** | All 3 robots freeze immediately (`state = 'frozen'`). Idle time counter spikes. | Zero effect — robots continue P2P coordination |
 | **Block Aisle** (click on grid) | Robot approaching blocked aisle stops and waits at blocked waypoint until cleared. | Robot(s) detect block via P2P broadcast, immediately replan alternate A* route |
 | **Latency Slider** (20ms – 2000ms) | Increases delay before cloud planner responds → slower reactions, more wait time | Zero effect on Proposed control loop |
 
 > [!IMPORTANT]
 > "Kill Cloud WiFi" is the single most powerful demo moment — Traditional side freezes, Proposed continues. Lead with this in the judging demo.
+
 
 ---
 
@@ -419,6 +421,7 @@ interface SimStore {
 - [ ] Build `ChaosPanel.tsx` — Kill WiFi toggle, click-to-block aisle, latency slider
 - [ ] Implement cloud kill effect (freeze Traditional, no effect on Proposed)
 - [ ] Implement block aisle effect (Traditional waits, Proposed rerouts)
+- [x] Implement **Grid power** chaos control — `warehousePower` toggle disables C1/C2, freezes charging, preserves all other state; `powerOutage` flag passed to both engines
 
 ### Phase 5 — Metrics & Polish (Day 4)
 - [ ] Build `MetricsPanel.tsx` with 3 Recharts charts
@@ -427,12 +430,16 @@ interface SimStore {
 - [ ] Apply warehouse-tone theme across all components
 - [ ] Add "CENTRALIZED" and "DECENTRALIZED P2P" banners on each side
 - [ ] Add robot path preview dots
+- [x] Warehouse power outage visual (dim `powerOverlay`, reduced station alpha in Phaser scene)
+- [x] Power outage UI notification banner (top-right, replaces charging overlay while power is off)
 
 ### Phase 6 — Testing & Demo Prep (Day 5)
 - [ ] Run a fixed-length simulation and compare the observed task throughput of Traditional and Proposed
 - [ ] Record a demo GIF for GitHub README
 - [ ] Build for production (`vite build`)
 - [ ] Deploy to Vercel/Netlify for shareable judge link
+- [ ] **Return-to-start** — robots home to their initial positions once all deliveries are done (not yet implemented)
+
 
 ---
 

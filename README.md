@@ -66,6 +66,19 @@ EDGE FLEET models AMRs moving boxes through a warehouse and provides a direct co
   - Automatically disappears when charging completes at 100% or state leaves `charging`.
   - Supports multiple robots charging simultaneously.
 
+## Warehouse Power Outage
+
+- **Grid power** (`warehousePower`) is a global boolean in the Zustand store; the **Grid power** button in the chaos panel toggles it off/on.
+- When power is **OFF**, charging stations `C1` and `C2` become unavailable to both Traditional and Decentralized engines.
+- Robots that are en route to charge (`goingToCharge`) enter waiting/power-saving behavior; no separate `powerSaving` state was added — the existing `waiting` state is reused.
+- Robots already in `charging` state stop gaining battery for the duration of the outage.
+- Power restoration allows normal charging to resume immediately on the next tick.
+- Active tasks, current positions, battery levels, and collision-avoidance logic are fully preserved during an outage; simulation continues uninterrupted.
+- Both Traditional and Decentralized modes pass the `powerOutage` flag through their tick functions (`traditionalTick` / `proposedTick`), so the behavior is symmetric.
+- **Visual**: The Phaser warehouse scene renders a dim dark overlay (`powerOverlay`) and reduces station sprite alpha when power is off, giving the warehouse a low-power/dim appearance.
+- **UI Notification**: A pulsing `WAREHOUSE POWER OFF — C1/C2 unavailable / Robots in power-saving mode` banner replaces the normal charging overlay in the top-right of the simulation view for the duration of the outage.
+
+
 ## Navigation & Collision Avoidance
 
 - Global routes use grid-based **A*** with a Manhattan heuristic.
@@ -85,6 +98,7 @@ EDGE FLEET models AMRs moving boxes through a warehouse and provides a direct co
   - Robot Health status list uses flexible grid column layout (`grid-cols-[2.25rem_minmax(0,1fr)_auto]`) with compact padding (`py-1.5`, `space-y-1.5`), ensuring all 3 robots (**R1**, **R2**, **R3**) remain fully represented and visible without vertical clipping.
 - **KILL**, **ALIVE**, and **SILENCE** provide individual robot failure and heartbeat controls.
 - **Battery -** is a testing/debug control that manually decreases a robot's battery by 10% to trigger and demonstrate automatic charging.
+- **Grid power** toggles the warehouse power outage; when off, `C1`/`C2` are unavailable, the warehouse dims visually, and a banner notification is shown in the simulation view.
 - **Block aisle** toggles a dynamic obstacle at the demo aisle; floor-cell interaction is also supported by the warehouse view where available.
 - **Cloud lag** changes centralized planner refresh intervals from 20 ms to 2000 ms and does not delay Proposed.
 - **Kill cloud** freezes Traditional; restoring the cloud lets it continue. Proposed is independent of this simulated flag.
@@ -101,6 +115,7 @@ EDGE FLEET models AMRs moving boxes through a warehouse and provides a direct co
 - Charging uses explicit `goingToCharge` and `charging` states; reservations derive from live robot state.
 - Visual storage stacks mirror the source-stack inventory model; they are not a separate inventory system.
 - Proposed green peer links are rendered from simulated `P2PLink` state. They do not represent real network traffic.
+- The `warehousePower` boolean in the Zustand store drives the `powerOutage` flag passed to both tick engines and to the Phaser renderer each frame; no separate robot state was added for power-saving mode.
 
 ## Current Limitations / Not Yet Implemented
 
@@ -109,7 +124,9 @@ EDGE FLEET models AMRs moving boxes through a warehouse and provides a direct co
 - ORCA and physics-based motion are not implemented; movement is grid-cell based.
 - The workload is fixed at six boxes with three fixed pickup/dropoff assignments; there is no external task queue or dynamic warehouse data source.
 - Centralized cloud latency is represented by deterministic refresh intervals, not measured network latency or a remote planner.
+- **Return-to-start** behavior (robots homing to their initial positions after all work is done) is not yet implemented.
 - Deployment, a hosted demo URL, and the planned headless validation script are not part of the current repository workflow.
+
 
 ## Tech Stack
 
