@@ -12,9 +12,9 @@ import chargingStationSheet from '../../../charging_station.png';
 const CELL = 100;
 const WORLD_WIDTH = GRID_COLS * CELL;
 const WORLD_HEIGHT = GRID_ROWS * CELL;
-const CLOUD = 0xf15b5b;
-const KILLED = 0xff4040;
-const MESH = 0x51d38d;
+const CLOUD = 0xc45d5d;
+const KILLED = 0xd94f4f;
+const MESH = 0x23855f;
 
 type Side = 'traditional' | 'proposed';
 
@@ -32,6 +32,8 @@ interface WarehouseFrame {
    * immediately when the robot picks up, not just on delivery completion.
    */
   robotCarrying: boolean[];
+  /** True when the warehouse power grid is down — warehouse lights dim and chargers are disabled. */
+  powerOutage: boolean;
 }
 
 interface RobotVisual {
@@ -63,6 +65,7 @@ export function PhaserWarehouse({ side }: PhaserWarehouseProps) {
   const completedTasks = useSimStore((state) => (side === 'traditional'
     ? state.traditional.metrics.totalTasksCompleted
     : state.proposed.metrics.totalTasksCompleted));
+  const powerOutage = useSimStore((state) => !state.warehousePower);
 
   useEffect(() => {
     const parent = parentRef.current;
@@ -73,7 +76,7 @@ export function PhaserWarehouse({ side }: PhaserWarehouseProps) {
     const game = new Phaser.Game({
       type: Phaser.AUTO,
       parent,
-      backgroundColor: '#071617',
+      backgroundColor: '#fbf1eb',
       transparent: false,
       antialias: true,
       render: { pixelArt: false, roundPixels: true },
@@ -101,7 +104,7 @@ export function PhaserWarehouse({ side }: PhaserWarehouseProps) {
       robotCarrying[robot.stationIndex] = robotCarrying[robot.stationIndex] || isCarrying;
     }
 
-    sceneRef.current?.sync({
+     sceneRef.current?.sync({
       robots,
       blockedCells,
       links: side === 'proposed' ? links : [],
@@ -109,8 +112,9 @@ export function PhaserWarehouse({ side }: PhaserWarehouseProps) {
       completedTasks,
       stackBoxes,
       robotCarrying,
+      powerOutage,
     });
-  }, [robots, stackBoxes, blockedCells, links, isPlaying, completedTasks, side]);
+  }, [robots, stackBoxes, blockedCells, links, isPlaying, completedTasks, side, powerOutage]);
 
   return <div ref={parentRef} className="h-full w-full" aria-label={`${side} live warehouse`} />;
 }
@@ -156,11 +160,22 @@ class WarehouseScene extends Phaser.Scene {
   private readonly sourceRacks: ReturnType<typeof createAisle>[] = [];
   private readonly destRacks: ReturnType<typeof createAisle>[] = [];
 
+  /** Stored charging-station visuals for on/off dimming. */
+  private readonly chargingStations = new Map<
+    string,
+    { image: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; highlight: Phaser.GameObjects.Graphics }
+  >();
+
+  /** Full-world overlay that dims lights when the grid is down. */
+  private powerOverlay!: Phaser.GameObjects.Graphics;
+
   private frame: WarehouseFrame | null = null;
   private linkLayer!: Phaser.GameObjects.Graphics;
+  private pathLayer!: Phaser.GameObjects.Graphics;
   private readonly side: Side;
   private lastStackBoxes: number[] = [-1, -1, -1];
   private lastRobotCarrying: boolean[] = [false, false, false];
+  private lastPowerOutage: boolean = false;
 
   constructor(side: Side) {
     super(`warehouse-${side}`);
@@ -168,13 +183,15 @@ class WarehouseScene extends Phaser.Scene {
   }
 
   create() {
-    this.cameras.main.setBackgroundColor('#071617');
+    this.cameras.main.setBackgroundColor('#fbf1eb');
     this.buildFloor();
     this.buildDecorativeBlocks();
     this.buildDedicatedRacks();
     this.buildStations();          // stations drawn on top of racks
     this.buildChargingStations();
+    this.pathLayer = this.add.graphics().setDepth(34);
     this.linkLayer = this.add.graphics().setDepth(35);
+    this.buildPowerOverlay();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.fitCamera, this);
     this.fitCamera();
 
@@ -199,16 +216,18 @@ class WarehouseScene extends Phaser.Scene {
 
   private buildFloor() {
     const floor = this.add.graphics().setDepth(0);
-    floor.fillStyle(0x102b2c, 1);
-    floor.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    floor.fillStyle(0xfdfdfc, 1);
+    floor.fillRoundedRect(18, 18, WORLD_WIDTH - 36, WORLD_HEIGHT - 36, 18);
+    floor.lineStyle(2, 0xe2ded9, 1);
+    floor.strokeRoundedRect(18, 18, WORLD_WIDTH - 36, WORLD_HEIGHT - 36, 18);
 
-    floor.lineStyle(1, 0x3e6965, 0.48);
-    for (let x = 0; x <= WORLD_WIDTH; x += CELL) floor.lineBetween(x, 0, x, WORLD_HEIGHT);
-    for (let y = 0; y <= WORLD_HEIGHT; y += CELL) floor.lineBetween(0, y, WORLD_WIDTH, y);
+    floor.lineStyle(1, 0xe7ecee, 0.9);
+    for (let x = CELL; x < WORLD_WIDTH; x += CELL) floor.lineBetween(x, 18, x, WORLD_HEIGHT - 18);
+    for (let y = CELL; y < WORLD_HEIGHT; y += CELL) floor.lineBetween(18, y, WORLD_WIDTH - 18, y);
 
-    floor.lineStyle(3, 0x5f8b81, 0.35);
-    [250, 650, 1_050].forEach((y) => floor.lineBetween(0, y, WORLD_WIDTH, y));
-    floor.lineStyle(2, 0xf2c14e, 0.28);
+    floor.lineStyle(3, 0xd9e4e5, 0.7);
+    [250, 650, 1_050].forEach((y) => floor.lineBetween(24, y, WORLD_WIDTH - 24, y));
+    floor.lineStyle(2, 0xd8b36b, 0.35);
     for (let x = 40; x < WORLD_WIDTH; x += 55) {
       floor.lineBetween(x, 48, x + 28, 48);
       floor.lineBetween(x, WORLD_HEIGHT - 48, x + 28, WORLD_HEIGHT - 48);
@@ -230,7 +249,7 @@ class WarehouseScene extends Phaser.Scene {
     for (const row of WAREHOUSE_GRID) {
       for (const cell of row) {
         if (cell.type !== 'pickup' && cell.type !== 'dropoff') continue;
-        const color = cell.type === 'pickup' ? 0xf2c14e : 0xf28f3b;
+        const color = cell.type === 'pickup' ? 0xf0c45f : 0xe9a15b;
         const x = cell.x * CELL + 8;
         const y = cell.y * CELL + 8;
         stations.fillStyle(color, 0.92);
@@ -243,10 +262,10 @@ class WarehouseScene extends Phaser.Scene {
 
         this.add
           .text(cell.x * CELL + CELL / 2, cell.y * CELL + CELL / 2, cell.label ?? '', {
-            fontFamily: 'monospace',
-            fontSize: '20px',
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '18px',
             fontStyle: 'bold',
-            color: '#0a1c1d',
+          color: '#5a4630',
           })
           .setOrigin(0.5)
           .setDepth(12);
@@ -258,46 +277,61 @@ class WarehouseScene extends Phaser.Scene {
     for (const row of WAREHOUSE_GRID) {
       for (const cell of row) {
         if (cell.type !== 'charging') continue;
+        const visualX = cell.x * CELL;
+        const visualY = cell.y * CELL;
 
         const highlight = this.add.graphics().setDepth(23);
-        highlight.fillStyle(0xffffff, 0.9);
+        highlight.fillStyle(0xf4fbf8, 1);
         highlight.fillRoundedRect(
-          cell.x * CELL + 9,
-          cell.y * CELL + 9,
+          visualX + 9,
+          visualY + 9,
           CELL - 18,
           CELL - 18,
           12,
         );
-        highlight.lineStyle(4, 0xffffff, 1);
+        highlight.lineStyle(3, 0x8ec9ae, 1);
         highlight.strokeRoundedRect(
-          cell.x * CELL + 5,
-          cell.y * CELL + 5,
+          visualX + 5,
+          visualY + 5,
           CELL - 10,
           CELL - 10,
           14,
         );
 
         const image = this.add
-          .image(cell.x * CELL + CELL / 2, cell.y * CELL + CELL / 2 - 4, 'charging-station-sheet')
+          .image(visualX + CELL / 2, visualY + CELL / 2 - 4, 'charging-station-sheet')
           .setCrop(0, 50, 320, 360)
-          .setDisplaySize(82, 92)
+          .setTint(0x78b995)
+          .setDisplaySize(70, 78)
           .setDepth(24);
 
-        this.add
-          .text(cell.x * CELL + CELL / 2, cell.y * CELL + CELL - 7, cell.label ?? '', {
-            fontFamily: 'monospace',
-            fontSize: '15px',
+        const label = this.add
+          .text(visualX + CELL / 2, visualY + CELL - 7, cell.label ?? '', {
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '14px',
             fontStyle: 'bold',
-            color: '#86efac',
-            stroke: '#071617',
-            strokeThickness: 4,
+            color: '#2b7650',
+            stroke: '#ffffff',
+            strokeThickness: 3,
           })
           .setOrigin(0.5, 1)
           .setDepth(25);
 
         image.setName(`charging-${cell.label ?? `${cell.x}-${cell.y}`}`);
+        this.chargingStations.set(`${cell.x},${cell.y}`, { image, label, highlight });
       }
     }
+  }
+
+  /**
+   * Full-world dark overlay that dims the warehouse lighting when the power
+   * grid is down.  Kept as a single Graphics object for efficiency — toggling
+   * its alpha is far cheaper than mutating every tile sprite per frame.
+   */
+  private buildPowerOverlay() {
+    this.powerOverlay = this.add.graphics().setDepth(40);
+    this.powerOverlay.fillStyle(0x0a1115, 0);
+    this.powerOverlay.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
   }
 
   /**
@@ -398,7 +432,9 @@ class WarehouseScene extends Phaser.Scene {
   }
 
   private renderFrame(frame: WarehouseFrame, animate: boolean) {
+    this.renderPowerState(frame.powerOutage);
     this.renderStorageInventory(frame.stackBoxes, frame.robotCarrying);
+    this.renderPaths(frame.robots);
     this.renderLinks(frame);
     this.renderObstacles(frame.blockedCells);
 
@@ -465,8 +501,8 @@ class WarehouseScene extends Phaser.Scene {
 
       const label = this.add
         .text(target.x, target.y + 51, '', {
-          fontFamily: 'monospace',
-          fontSize: '15px',
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '14px',
           fontStyle: 'bold',
           color: '#e5f3ee',
           stroke: '#071617',
@@ -555,7 +591,7 @@ class WarehouseScene extends Phaser.Scene {
       visual.label.setColor('#f2c14e');
     } else {
       visual.label.setText(`${robot.id}  ${Math.round(robot.battery)}%${frozen ? '  DONE' : waiting ? '  HOLD' : ''}`);
-      visual.label.setColor(frozen ? '#6fd4a7' : robot.battery < 25 ? '#f2c14e' : '#e5f3ee');
+      visual.label.setColor(frozen ? '#3d936c' : robot.battery < 25 ? '#b77d24' : '#34434b');
     }
 
     // Dim the robot body when killed
@@ -570,6 +606,7 @@ class WarehouseScene extends Phaser.Scene {
         obstacle.destroy();
         this.obstacles.delete(key);
       }
+
     }
     for (const key of blockedCells) {
       if (this.obstacles.has(key)) continue;
@@ -578,6 +615,53 @@ class WarehouseScene extends Phaser.Scene {
       const obstacle = createObstacle(this, pos.x - 43, pos.y + 29, { width: 86, label: 'STOP' });
       obstacle.container.setScale(0.78).setDepth(48);
       this.obstacles.set(key, obstacle);
+    }
+   }
+
+  /**
+   * Dims warehouse lighting and disables the visual appearance of charging
+   * stations C1/C2 when the power grid is down.  Uses a subtle ambient overlay
+   * (not a jarring red screen) to keep the light-industrial aesthetic.
+   */
+  private renderPowerState(powerOutage: boolean) {
+    if (powerOutage === this.lastPowerOutage) return;
+    this.lastPowerOutage = powerOutage;
+
+    this.powerOverlay.clear();
+    this.powerOverlay.fillStyle(0x0a1115, powerOutage ? 0.22 : 0);
+    this.powerOverlay.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+    for (const { image, label, highlight } of this.chargingStations.values()) {
+      const dimAlpha = powerOutage ? 0.3 : 1;
+      image.setAlpha(dimAlpha);
+      label.setAlpha(powerOutage ? 0.4 : 1);
+      highlight.setAlpha(dimAlpha);
+      if (powerOutage) {
+        image.setTint(0x5a5a5a);
+      } else {
+        image.setTint(0x78b995);
+      }
+    }
+  }
+
+  private renderPaths(robots: Robot[]) {
+    this.pathLayer.clear();
+    for (const robot of robots) {
+      if (robot.path.length === 0) continue;
+      const pathColor = robot.state === 'goingToCharge' || robot.state === 'charging'
+        ? 0x3e9b70
+        : robot.battery < 25
+          ? 0xc18a2e
+          : robot.state === 'failed' || robot.state === 'killed'
+            ? 0xd94f4f
+            : 0x397fc1;
+      this.pathLayer.lineStyle(3, pathColor, 0.72);
+      let previous = cellCenter(robot.position);
+      for (const waypoint of robot.path) {
+        const next = cellCenter(waypoint);
+        this.pathLayer.lineBetween(previous.x, previous.y, next.x, next.y);
+        previous = next;
+      }
     }
   }
 

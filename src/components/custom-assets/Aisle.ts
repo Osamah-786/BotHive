@@ -73,13 +73,13 @@ export function createAisle(
 
     // ---- colors --------------------------------------------------------
 
-    const FRONT      = 0x3a3a5c;   // dark blue-grey front face
-    const SIDE       = 0x27273f;   // darker side
-    const TOP_COL    = 0x4e4e70;   // lighter top
-    const EDGE       = 0x1a1a2e;   // darkest outline
-    const UPRIGHT    = 0x2b2b48;   // vertical uprights
-    const SHELF_COL  = 0x454568;   // shelf boards
-    const CLEAR_COL  = 0xffd166;   // clearance zone stripe (safety yellow)
+    const FRONT      = 0xeadfd3;
+    const SIDE       = 0xc6b8aa;
+    const TOP_COL    = 0xf6eee7;
+    const EDGE       = 0x9f8e7d;
+    const UPRIGHT    = 0xb7a494;
+    const SHELF_COL  = 0xd5c7b9;
+    const CLEAR_COL  = 0xe4b866;
 
     // ---- container -----------------------------------------------------
 
@@ -139,7 +139,7 @@ export function createAisle(
             {
                 fontFamily: "monospace",
                 fontSize: "10px",
-                color: "#ffd166",
+                color: "#a8752a",
                 align: "center"
             }
         );

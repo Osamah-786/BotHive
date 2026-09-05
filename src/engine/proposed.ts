@@ -30,6 +30,8 @@ export interface ProposedTickOptions {
   blockedCells?: Set<string>;
   killedRobots?: Set<string>;
   unresponsiveRobots?: Set<string>;
+  /** True when the warehouse power grid is down (chargers unavailable). */
+  powerOutage?: boolean;
 }
 
 export interface ProposedTickResult extends EngineResult {
@@ -53,6 +55,7 @@ export function proposedTick(
     blockedCells = new Set<string>(),
     killedRobots = new Set<string>(),
     unresponsiveRobots = new Set<string>(),
+    powerOutage = false,
   }: ProposedTickOptions,
 ): ProposedTickResult {
   // ── Step 1: Exchange existing tick state as heartbeats and detect peers ───
@@ -103,6 +106,7 @@ export function proposedTick(
           side.stackBoxes,
           side.remainingBoxes,
           chargingReservations,
+          powerOutage,
         ),
   );
 
@@ -173,10 +177,17 @@ function prepareRobot(
   stackBoxes: number[],
   remainingBoxes: number,
   chargingReservations: Set<number>,
+  powerOutage: boolean,
 ): Robot {
   // Killed robots are frozen — no path planning, no movement.
   if (source.state === 'killed' || source.state === 'failed') return { ...source, path: [] };
   if (source.state === 'charging') return source;
+
+  // Power outage: robots en route to a charger abandon the charge attempt
+  // and enter power-saving mode (waiting) — they do not enter a charger.
+  if (powerOutage && source.state === 'goingToCharge') {
+    return { ...source, state: 'waiting', chargingStationIndex: undefined, path: [] };
+  }
 
   if (source.state === 'goingToCharge') {
     const robot = cloneRobot(source);
@@ -202,6 +213,7 @@ function prepareRobot(
   }
 
   if (
+    !powerOutage &&
     source.battery <= LOW_BATTERY_THRESHOLD &&
     source.task === 'pickup' &&
     !source.rescueFromPosition

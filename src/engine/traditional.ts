@@ -27,6 +27,8 @@ export interface TraditionalTickOptions {
   blockedCells?: Set<string>;
   cloudKilled?: boolean;
   killedRobots?: Set<string>;
+  /** True when the warehouse power grid is down (chargers unavailable). */
+  powerOutage?: boolean;
   /** The centralized planner only refreshes routes on these tick boundaries. */
   plannerInterval?: number;
 }
@@ -44,6 +46,7 @@ export function traditionalTick(
     blockedCells = new Set<string>(),
     cloudKilled = false,
     killedRobots = new Set<string>(),
+    powerOutage = false,
     plannerInterval = 1,
   }: TraditionalTickOptions,
 ): EngineResult {
@@ -91,6 +94,7 @@ export function traditionalTick(
       side.stackBoxes,
       side.remainingBoxes,
       chargingReservations,
+      powerOutage,
     ),
   );
   
@@ -133,9 +137,16 @@ function prepareRobot(
   stackBoxes: number[],
   remainingBoxes: number,
   chargingReservations: Set<number>,
+  powerOutage: boolean,
 ): Robot {
   if (source.state === 'killed' || source.state === 'failed') return { ...source, path: [] };
   if (source.state === 'charging') return source;
+
+  // Power outage: robots en route to a charger abandon the charge attempt
+  // and enter power-saving mode (waiting) — they do not enter a charger.
+  if (powerOutage && source.state === 'goingToCharge') {
+    return { ...source, state: 'waiting', chargingStationIndex: undefined, path: [] };
+  }
 
   if (source.state === 'goingToCharge') {
     const robot = cloneRobot(source);
@@ -154,6 +165,7 @@ function prepareRobot(
     return robot;
   }
   if (
+    !powerOutage &&
     source.battery <= LOW_BATTERY_THRESHOLD &&
     source.task === 'pickup' &&
     !source.rescueFromPosition

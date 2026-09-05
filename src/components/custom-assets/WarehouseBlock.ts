@@ -28,11 +28,11 @@ export function createWarehouseBlock(
      * =========================================================
      */
 
-    const FRONT = 0x5a2b16;
-    const SIDE = 0x421d10;
-    const TOP = 0x71391e;
+    const FRONT = 0xc8b8aa;
+    const SIDE = 0xa89584;
+    const TOP = 0xe3d6ca;
 
-    const EDGE = 0x30150c;
+    const EDGE = 0x8c7868;
 
     /*
      * =========================================================

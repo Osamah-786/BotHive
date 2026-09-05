@@ -44,9 +44,9 @@ export function createAMR(
     const BODY_DARK = theme ? theme.dark : 0x318b38;
     const BODY_LIGHT = theme ? theme.light : 0x7ed66e;
 
-    const BLACK = 0x202020;
-    const DARK = 0x111111;
-    const METAL = 0x555555;
+    const BLACK = 0x34434b;
+    const DARK = 0x223038;
+    const METAL = 0x7f8d91;
 
     /*
      * =========================================================
@@ -299,7 +299,6 @@ export function createAMR(
      */
 
     function createLoad() {
-
         if (!carrying) {
             return;
         }
@@ -308,22 +307,12 @@ export function createAMR(
 
         const box = scene.add.graphics();
 
-        // One unmistakable carton.
+        // One clearly separated cardboard box.
         box.fillStyle(0xc98b45, 1);
-
         box.fillRect(
             0,
             -65,
             82,
-            58
-        );
-
-        box.fillStyle(0xdba65b, 1);
-
-        box.fillRect(
-            38,
-            -65,
-            9,
             58
         );
 
@@ -338,32 +327,6 @@ export function createAMR(
             -65,
             82,
             58
-        );
-
-        // Pallet
-        box.fillStyle(0x75451f, 1);
-
-        box.fillRect(
-            -3,
-            -7,
-            90,
-            8
-        );
-
-        box.fillStyle(0x4f2e19, 1);
-
-        box.fillRect(
-            5,
-            1,
-            10,
-            9
-        );
-
-        box.fillRect(
-            70,
-            1,
-            10,
-            9
         );
 
         pallet.add(box);

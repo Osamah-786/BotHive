@@ -57,6 +57,8 @@ export interface SimStore {
   killedRobots: Set<string>;
   /** Proposed-side robots in a simulated communication blackout. */
   unresponsiveRobots: Set<string>;
+  /** Warehouse power grid state — when false, chargers (C1/C2) are unavailable. */
+  warehousePower: boolean;
 
   // ── Simulation sides ────────────────────────────────────────────────────────
   traditional: {
@@ -91,6 +93,9 @@ export interface SimStore {
   toggleRobotUnresponsive: (id: string) => void;
   decreaseRobotBattery: (id: string, amount: number) => void;
 
+  /** Toggle the warehouse power grid (outage simulation). */
+  toggleWarehousePower: () => void;
+
   /** Called each engine tick to advance the tick counter */
   setTick: (t: number) => void;
 
@@ -114,6 +119,7 @@ export const useSimStore = create<SimStore>((set) => ({
   latencyMs: 200,
   killedRobots: new Set<string>(),
   unresponsiveRobots: new Set<string>(),
+  warehousePower: true,
 
   // ── Initial side states ─────────────────────────────────────────────────────
   traditional: {
@@ -141,9 +147,10 @@ export const useSimStore = create<SimStore>((set) => ({
       cloudKilled: false,
       blockedCells: new Set<string>(),
       latencyMs: 200,
-      killedRobots: new Set<string>(),
-      unresponsiveRobots: new Set<string>(),
-      traditional: { robots: makeRobots(), metrics: makeMetrics(), remainingBoxes: TOTAL_BOXES, stackBoxes: [2, 2, 2] },
+       killedRobots: new Set<string>(),
+       unresponsiveRobots: new Set<string>(),
+       warehousePower: true,
+       traditional: { robots: makeRobots(), metrics: makeMetrics(), remainingBoxes: TOTAL_BOXES, stackBoxes: [2, 2, 2] },
       proposed:    { robots: makeRobots(), metrics: makeMetrics(), remainingBoxes: TOTAL_BOXES, stackBoxes: [2, 2, 2], p2pLinks: [] },
     }),
 
@@ -162,6 +169,9 @@ export const useSimStore = create<SimStore>((set) => ({
     }),
 
   setLatency: (ms) => set({ latencyMs: ms }),
+
+  toggleWarehousePower: () =>
+    set((state) => ({ warehousePower: !state.warehousePower })),
 
   killRobot: (id) =>
     set((state) => {

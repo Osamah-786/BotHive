@@ -29,6 +29,8 @@ export interface ConflictResolutionOptions {
   /** Traditional cloud coordination intentionally only looks one step ahead. */
   horizon?: number;
   stackBoxes?: number[];
+  /** True when the warehouse power grid is down — charging robots hold position without +10%/tick. */
+  powerOutage?: boolean;
 }
 
 export interface ConflictResolutionResult {
@@ -92,7 +94,12 @@ export function resolveRobotMoves(
   for (const robot of priorityOrder) {
     if (robot.state === 'charging') {
       reservations.push({ robotId: robot.id, trajectory: holdTrajectory(robot.position, horizon) });
-      resolvedById.set(robot.id, advanceCharging(robot));
+      resolvedById.set(
+        robot.id,
+        options.powerOutage
+          ? { ...robot, path: [] }
+          : advanceCharging(robot),
+      );
       continue;
     }
     if (robot.tasksCompleted >= MAX_TASKS) {
@@ -151,7 +158,11 @@ function resolveCooperativeMoves(
   const selected = chooseJointMoves(robots, candidates);
 
   const resolved = robots.map((robot, index) => {
-    if (robot.state === 'charging') return advanceCharging(robot);
+    if (robot.state === 'charging') {
+      return options.powerOutage
+        ? { ...robot, path: [] }
+        : advanceCharging(robot);
+    }
     if (robot.tasksCompleted >= MAX_TASKS) return { ...robot, state: 'frozen' as const, path: [] };
     const candidate = selected[index];
     if (!candidate || sameCell(candidate.position, robot.position)) {

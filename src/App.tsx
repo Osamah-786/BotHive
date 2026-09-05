@@ -26,7 +26,7 @@ export default function App() {
   return (
     <div
       className="flex h-screen w-screen flex-col overflow-hidden"
-      style={{ background: '#071617', fontFamily: "'Geist Variable', monospace" }}
+      style={{ background: '#f8f7f4', fontFamily: "'Geist Variable', sans-serif" }}
     >
       <Header />
 
@@ -75,6 +75,7 @@ function useSimulationLoop() {
             blockedCells: current.blockedCells,
             cloudKilled: current.cloudKilled,
             killedRobots: current.killedRobots,
+            powerOutage: !current.warehousePower,
             // Fixed logical ticks model the cloud round-trip without timers.
             plannerInterval: Math.max(1, Math.ceil(current.latencyMs / BASE_TICK_MS)),
           });
@@ -83,6 +84,7 @@ function useSimulationLoop() {
             blockedCells: current.blockedCells,
             killedRobots: current.killedRobots,
             unresponsiveRobots: current.unresponsiveRobots,
+            powerOutage: !current.warehousePower,
           });
 
           current.setTraditionalState(

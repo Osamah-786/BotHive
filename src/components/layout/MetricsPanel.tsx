@@ -23,8 +23,8 @@ type ChartDatum = {
   meshConflicts: number;
 };
 
-const CLOUD = '#f15b5b';
-const MESH = '#51d38d';
+const CLOUD = '#df3f49';
+const MESH = '#1eaa73';
 
 /** Live, compact mission ledger driven directly by the simulation store. */
 export function MetricsPanel({ fullPage }: { fullPage?: boolean }) {
@@ -38,23 +38,23 @@ export function MetricsPanel({ fullPage }: { fullPage?: boolean }) {
 
   return (
     <section
-      className={`flex flex-col border-[#244446] bg-[#081a1b] ${fullPage ? 'h-full overflow-y-auto border' : 'h-[206px] flex-shrink-0 border-t'}`}
+      className={`flex flex-col border-[#e1ded8] bg-[#f8f7f4] ${fullPage ? 'h-full overflow-y-auto border' : 'h-[206px] flex-shrink-0 border-t'}`}
       aria-label="Fleet telemetry"
     >
-      <div className="flex h-8 flex-shrink-0 items-center justify-between border-b border-[#173738] px-4 md:px-5">
+      <div className="flex h-8 flex-shrink-0 items-center justify-between border-b border-[#e1ded8] px-4 md:px-5">
         <div className="flex items-center gap-2">
-          <Activity size={13} className="text-[#f2c14e]" aria-hidden="true" />
-          <h2 className="font-mono text-[10px] font-bold tracking-[0.2em] text-[#e5f3ee] uppercase">Fleet telemetry</h2>
-          <span className="font-mono text-[8px] tracking-[0.12em] text-[#60817d] uppercase">live comparison</span>
+          <Activity size={13} className="text-[#c98c18]" aria-hidden="true" />
+          <h2 className="font-sans text-[10px] font-bold tracking-[0.12em] text-[#1f3442] uppercase">Fleet telemetry</h2>
+          <span className="font-sans text-[8px] tracking-[0.1em] text-[#879197] uppercase">live comparison</span>
         </div>
-        <div className="flex items-center gap-1.5 font-mono text-[9px] tabular-nums text-[#86aaa4]">
-          <RadioTower size={12} className="text-[#51d38d]" aria-hidden="true" />
+        <div className="flex items-center gap-1.5 font-sans text-[9px] tabular-nums text-[#68777d]">
+          <RadioTower size={12} className="text-[#1eaa73]" aria-hidden="true" />
           T+{formatSeconds(tick)}s
         </div>
       </div>
 
-      <div className={`${fullPage ? 'flex min-h-0 flex-1 flex-col gap-px bg-[#244446]' : 'grid min-h-0 flex-1 grid-cols-1 gap-px bg-[#244446] lg:grid-cols-[minmax(390px,0.95fr)_minmax(560px,1.5fr)]'}`}>
-        <div className={`grid gap-px bg-[#244446] ${fullPage ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-3'}`}>
+      <div className={`${fullPage ? 'flex min-h-0 flex-1 flex-col gap-px bg-[#e1ded8]' : 'grid min-h-0 flex-1 grid-cols-1 gap-px bg-[#e1ded8] lg:grid-cols-[minmax(390px,0.95fr)_minmax(560px,1.5fr)]'}`}>
+        <div className={`grid gap-px bg-[#e1ded8] ${fullPage ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-3'}`}>
           <MetricCard
             label="Tasks done"
             cloudValue={String(traditional.totalTasksCompleted)}
@@ -75,7 +75,7 @@ export function MetricsPanel({ fullPage }: { fullPage?: boolean }) {
           />
         </div>
 
-        <div className={`grid min-h-0 gap-px bg-[#244446] ${fullPage ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-3'}`}>
+        <div className={`grid min-h-0 shrink-0 gap-px bg-[#e1ded8] ${fullPage ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-3'}`}>
           <TrendChart title="Tasks complete" data={chartData} cloudKey="cloudTasks" meshKey="meshTasks" kind="line" fullPage={fullPage} />
           <TrendChart title="Cumulative idle" data={chartData} cloudKey="cloudIdle" meshKey="meshIdle" kind="area" fullPage={fullPage} />
           <TrendChart title="Conflict events" data={chartData} cloudKey="cloudConflicts" meshKey="meshConflicts" kind="line" fullPage={fullPage} />
@@ -113,8 +113,8 @@ function DispatchDesk({ tick, cloudRobots, meshRobots, cloudMetrics, meshMetrics
   const waiting = meshRobots.filter((robot) => robot.state === 'waiting');
 
   return (
-    <div className="grid gap-px bg-[#244446] xl:grid-cols-[1.25fr_1fr]">
-      <article className="bg-[#0c2021] px-4 py-3">
+    <div className="grid shrink-0 gap-px bg-[#e1ded8] xl:grid-cols-[1.25fr_1fr]">
+      <article className="bg-white px-4 py-3">
         <PanelHeading icon={Battery} title="Robot health" detail="P2P fleet · live battery and route load" />
         <div className="mt-3 space-y-1.5">
           {meshRobots.map((robot) => (
@@ -123,28 +123,28 @@ function DispatchDesk({ tick, cloudRobots, meshRobots, cloudMetrics, meshMetrics
         </div>
       </article>
 
-      <article className="bg-[#0c2021] px-4 py-3">
+      <article className="bg-white px-4 py-3">
         <PanelHeading icon={Gauge} title="Dispatch priority" detail="next reservation order" />
-        <ol className="mt-3 divide-y divide-[#244446] border-y border-[#244446]">
+        <ol className="mt-3 divide-y divide-[#e1ded8] border-y border-[#e1ded8]">
           {priorityQueue.map((robot, index) => (
-            <li key={robot.id} className="grid grid-cols-[1.5rem_2.4rem_1fr_auto] items-center gap-2 py-2 font-mono">
-              <span className="text-[10px] font-bold tabular-nums text-[#f2c14e]">0{index + 1}</span>
+            <li key={robot.id} className="grid grid-cols-[1.5rem_2.4rem_1fr_auto] items-center gap-2 py-2 font-sans">
+              <span className="text-[10px] font-bold tabular-nums text-[#c98c18]">0{index + 1}</span>
               <span className="text-[10px] font-bold" style={{ color: robot.color }}>{robot.id}</span>
-              <span className="min-w-0 text-[9px] tracking-[0.04em] text-[#b7ceca]">
+              <span className="min-w-0 text-[9px] tracking-[0.04em] text-[#68777d]">
                 U {Math.round(robot.urgency * 100)} · B {Math.round(robot.battery)} · idle {formatSeconds(robot.idleTime)}s
               </span>
-              <span className={`text-[8px] font-bold tracking-[0.1em] uppercase ${robot.state === 'waiting' ? 'text-[#f2c14e]' : 'text-[#51d38d]'}`}>
+              <span className={`text-[8px] font-bold tracking-[0.1em] uppercase ${robot.state === 'waiting' ? 'text-[#c98c18]' : 'text-[#1eaa73]'}`}>
                 {robot.state === 'waiting' ? 'yield' : 'ready'}
               </span>
             </li>
           ))}
         </ol>
-        <p className="mt-2 font-mono text-[8px] leading-relaxed tracking-[0.05em] text-[#60817d] uppercase">
+        <p className="mt-2 font-sans text-[8px] leading-relaxed tracking-[0.05em] text-[#879197] uppercase">
           Priority: urgency → battery → oldest task → robot ID
         </p>
       </article>
 
-      <article className="bg-[#0c2021] px-4 py-3">
+      <article className="bg-white px-4 py-3">
         <PanelHeading icon={Activity} title="Fleet utilization" detail="live operating state" />
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <FleetUtilization side="Cloud" color={CLOUD} summary={cloudSummary} />
@@ -152,9 +152,9 @@ function DispatchDesk({ tick, cloudRobots, meshRobots, cloudMetrics, meshMetrics
         </div>
       </article>
 
-      <article className="bg-[#0c2021] px-4 py-3">
+      <article className="bg-white px-4 py-3">
         <PanelHeading icon={ShieldCheck} title="Coordination status" detail="P2P reservation desk" />
-        <div className="mt-3 grid grid-cols-3 divide-x divide-[#244446] border-y border-[#244446]">
+        <div className="mt-3 grid grid-cols-3 divide-x divide-[#e1ded8] border-y border-[#e1ded8]">
           <StatusReadout label="Peer links" value={String(peerLinks.length)} color={MESH} />
           <StatusReadout label="Active holds" value={String(waiting.length)} color={waiting.length ? '#f2c14e' : MESH} />
           <StatusReadout label="Avoided conflicts" value={String(meshMetrics.conflictCount)} color="#f2c14e" />
@@ -163,11 +163,11 @@ function DispatchDesk({ tick, cloudRobots, meshRobots, cloudMetrics, meshMetrics
           {waiting.length > 0 ? (
             <p className="text-[#f4d68c]">HOLD · {waiting.map((robot) => robot.id).join(', ')} yielding to a protected reservation.</p>
           ) : peerLinks.length > 0 ? (
-            <p className="text-[#87eab5]">MESH · {peerLinks.map((link) => `${link.from}↔${link.to}`).join('  ')}</p>
+            <p className="text-[#1eaa73]">MESH · {peerLinks.map((link) => `${link.from}↔${link.to}`).join('  ')}</p>
           ) : (
-            <p className="text-[#87eab5]">CLEAR · Independent routes are progressing.</p>
+            <p className="text-[#1eaa73]">CLEAR · Independent routes are progressing.</p>
           )}
-          <p className="text-[#60817d]">Cloud planner has logged {cloudMetrics.conflictCount} resolution events.</p>
+          <p className="text-[#879197]">Cloud planner has logged {cloudMetrics.conflictCount} resolution events.</p>
         </div>
       </article>
     </div>
@@ -178,31 +178,31 @@ function PanelHeading({ icon: Icon, title, detail }: { icon: typeof Activity; ti
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2">
-        <Icon size={13} className="text-[#f2c14e]" aria-hidden="true" />
-        <h3 className="font-mono text-[10px] font-bold tracking-[0.16em] text-[#e5f3ee] uppercase">{title}</h3>
+        <Icon size={13} className="text-[#c98c18]" aria-hidden="true" />
+        <h3 className="font-sans text-[10px] font-bold tracking-[0.12em] text-[#1f3442] uppercase">{title}</h3>
       </div>
-      <span className="font-mono text-[8px] tracking-[0.08em] text-[#60817d] uppercase">{detail}</span>
+      <span className="font-sans text-[8px] tracking-[0.08em] text-[#879197] uppercase">{detail}</span>
     </div>
   );
 }
 
 function RobotHealthRow({ robot }: { robot: Robot }) {
-  const batteryColor = robot.battery < 25 ? '#f15b5b' : robot.battery < 50 ? '#f2c14e' : MESH;
+  const batteryColor = robot.battery < 25 ? '#c34d55' : robot.battery < 50 ? '#c98c18' : MESH;
   const target = `${robot.task === 'pickup' ? 'P' : 'D'}${robot.stationIndex + 1}`;
   const remainingTasks = Math.max(0, Math.min(MAX_TASKS, Math.floor((robot.battery + 0.0001) / ENERGY_PER_TASK)));
   return (
-    <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 border border-[#244446] bg-[#091d1e] px-2.5 py-1.5">
+    <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 border border-[#e1ded8] bg-[#fbfaf8] px-2.5 py-1.5">
       <span className="font-mono text-[10px] font-bold" style={{ color: robot.color }}>{robot.id}</span>
       <div className="min-w-0">
-        <div className="mb-1 flex items-center justify-between gap-2 font-mono text-[8px] tracking-[0.08em] uppercase">
-          <span className="truncate text-[#86aaa4]">Target {target} · {robot.path.length} cells</span>
+        <div className="mb-1 flex items-center justify-between gap-2 font-sans text-[8px] tracking-[0.08em] uppercase">
+          <span className="truncate text-[#68777d]">Target {target} · {robot.path.length} cells</span>
           <span style={{ color: batteryColor }}>{robot.battery.toFixed(2)}% · {robot.tasksCompleted} done · {remainingTasks} left</span>
         </div>
-        <div className="h-1 overflow-hidden bg-[#173738]" aria-label={`${robot.id} battery ${robot.battery.toFixed(2)} percent`}>
+        <div className="h-1 overflow-hidden bg-[#e8e5df]" aria-label={`${robot.id} battery ${robot.battery.toFixed(2)} percent`}>
           <div className="h-full transition-[width] duration-200" style={{ width: `${robot.battery}%`, background: batteryColor }} />
         </div>
       </div>
-      <span className={`text-right font-mono text-[8px] font-bold tracking-[0.1em] uppercase ${robot.state === 'moving' ? 'text-[#87eab5]' : robot.state === 'waiting' ? 'text-[#f4d68c]' : 'text-[#f59a9a]'}`}>
+      <span className={`text-right font-sans text-[8px] font-bold tracking-[0.1em] uppercase ${robot.state === 'moving' ? 'text-[#1eaa73]' : robot.state === 'waiting' ? 'text-[#c98c18]' : 'text-[#c34d55]'}`}>
         {robot.state}
       </span>
     </div>
@@ -232,15 +232,15 @@ function summarizeFleet(robots: Robot[], tick: number): FleetSummary {
 function FleetUtilization({ side, color, summary }: { side: string; color: string; summary: FleetSummary }) {
   const utilization = Math.round(summary.utilization * 100);
   return (
-    <div className="border border-[#244446] bg-[#091d1e] px-2.5 py-2">
+    <div className="border border-[#e1ded8] bg-[#fbfaf8] px-2.5 py-2">
       <div className="flex items-baseline justify-between font-mono">
         <span className="text-[9px] font-bold tracking-[0.1em] uppercase" style={{ color }}>{side}</span>
-        <span className="text-sm font-bold tabular-nums text-[#e5f3ee]">{utilization}%</span>
+        <span className="text-sm font-bold tabular-nums text-[#1f3442]">{utilization}%</span>
       </div>
-      <div className="mt-2 h-1.5 overflow-hidden bg-[#173738]">
+      <div className="mt-2 h-1.5 overflow-hidden bg-[#e8e5df]">
         <div className="h-full transition-[width] duration-200" style={{ width: `${utilization}%`, background: color }} />
       </div>
-      <p className="mt-2 font-mono text-[8px] tracking-[0.06em] text-[#86aaa4] uppercase">
+      <p className="mt-2 font-sans text-[8px] tracking-[0.06em] text-[#68777d] uppercase">
         {summary.moving} moving · {summary.waiting} hold · {summary.frozen} frozen · {Math.round(summary.averageBattery)}% avg battery
       </p>
     </div>
@@ -250,7 +250,7 @@ function FleetUtilization({ side, color, summary }: { side: string; color: strin
 function StatusReadout({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div className="min-w-0 px-2.5 py-2 first:pl-0 last:pr-0">
-      <p className="truncate font-mono text-[8px] tracking-[0.08em] text-[#60817d] uppercase">{label}</p>
+      <p className="truncate font-sans text-[8px] tracking-[0.08em] text-[#879197] uppercase">{label}</p>
       <p className="mt-0.5 font-mono text-base font-bold tabular-nums" style={{ color }}>{value}</p>
     </div>
   );
@@ -274,20 +274,20 @@ interface TrendChartProps {
 
 function TrendChart({ title, data, cloudKey, meshKey, kind, fullPage }: TrendChartProps) {
   const tooltipStyle = {
-    background: '#0c2021',
-    border: '1px solid #31585a',
-    color: '#e5f3ee',
-    fontFamily: 'monospace',
+    background: '#ffffff',
+    border: '1px solid #e1ded8',
+    color: '#1f3442',
+    fontFamily: "'Geist Variable', sans-serif",
     fontSize: '10px',
   };
 
   return (
-    <article className="relative min-w-0 bg-[#0c2021] px-2.5 py-2 flex flex-col">
+    <article className="relative flex min-w-0 flex-col bg-white px-2.5 py-2">
       <div className="flex flex-shrink-0 items-center justify-between gap-2">
-        <h3 className="truncate font-mono text-[9px] font-bold tracking-[0.1em] text-[#86aaa4] uppercase">{title}</h3>
+        <h3 className="truncate font-sans text-[9px] font-bold tracking-[0.1em] text-[#68777d] uppercase">{title}</h3>
         <div className="flex items-center gap-1.5" aria-label="Cloud red, P2P green">
-          <i className="h-1.5 w-1.5 rounded-full bg-[#f15b5b]" />
-          <i className="h-1.5 w-1.5 rounded-full bg-[#51d38d]" />
+          <i className="h-1.5 w-1.5 rounded-full bg-[#df3f49]" />
+          <i className="h-1.5 w-1.5 rounded-full bg-[#1eaa73]" />
         </div>
       </div>
       <div className={`relative mt-1 min-w-0 w-full ${fullPage ? 'h-[140px]' : 'h-[132px]'}`}>
@@ -314,8 +314,8 @@ function TrendChart({ title, data, cloudKey, meshKey, kind, fullPage }: TrendCha
 function CompactTooltip({ active, payload, label }: TooltipContentProps) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="font-mono text-[10px] text-[#e5f3ee]">
-      <p className="mb-1 text-[#86aaa4]">tick {label}</p>
+    <div className="font-sans text-[10px] text-[#1f3442]">
+      <p className="mb-1 text-[#68777d]">tick {label}</p>
       {payload.map((entry) => (
         <p key={String(entry.dataKey)} style={{ color: entry.color }}>{entry.name}: {entry.value}</p>
       ))}
