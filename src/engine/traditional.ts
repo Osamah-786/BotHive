@@ -183,7 +183,12 @@ function prepareRobot(
   if (isWorkFinished(source, remainingBoxes, stackBoxes)) {
     const home = originalHomePosition(source);
     if (sameCell(source.position, home)) {
-      return { ...source, state: 'frozen', path: [], coveringForRobotId: undefined };
+      return {
+        ...source,
+        state: 'frozen',
+        path: [],
+        coveringForRobotId: undefined,
+      };
     }
     let robot = cloneRobot(source);
     robot.coveringForRobotId = undefined;
@@ -201,13 +206,22 @@ function prepareRobot(
   if (sameCell(robot.position, target) && robot.path.length === 0) {
     if (robot.rescueFromPosition) {
       robot = { ...robot, task: 'dropoff', rescueFromPosition: undefined };
-    } else if (robot.task === 'pickup' && !hasAvailablePickupBox(robot, stackBoxes)) {
+    } else if (
+      robot.task === 'pickup' &&
+      robot.pendingTransportTask === undefined &&
+      !hasAvailablePickupBox(robot, stackBoxes)
+    ) {
       return { ...robot, state: 'frozen', path: [] };
     } else {
       robot = advanceTaskAfterArrival(robot, tick);
     }
 
-    if (robot.task === 'pickup' && robot.path.length === 0 && !hasAvailablePickupBox(robot, stackBoxes)) {
+    if (
+      robot.task === 'pickup' &&
+      robot.pendingTransportTask === undefined &&
+      robot.path.length === 0 &&
+      !hasAvailablePickupBox(robot, stackBoxes)
+    ) {
       return { ...robot, state: 'frozen', path: [] };
     }
   }

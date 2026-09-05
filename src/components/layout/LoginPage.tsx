@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation } from 'wouter';
 import { useAuthStore } from '../../store/useAuthStore';
 import { ShieldCheck, UserPlus, LogIn, Lock, Mail, User, AlertCircle } from 'lucide-react';
+import bothiveLogo from '../../../logo/bothive.png';
 
 interface LoginPageProps {
   initialMode?: 'login' | 'signup';
@@ -20,11 +21,11 @@ export function LoginPage({ initialMode = 'login' }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // If already authenticated, redirect to /dashboard
-  if (isAuthenticated) {
-    setLocation('/dashboard');
-    return null;
-  }
+  useEffect(() => {
+    if (isAuthenticated) setLocation('/dashboard');
+  }, [isAuthenticated, setLocation]);
+
+  if (isAuthenticated) return null;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -82,15 +83,10 @@ export function LoginPage({ initialMode = 'login' }: LoginPageProps) {
       <div className="w-full max-w-md rounded-lg border border-[#d9d6d0] bg-white p-6 shadow-sm md:p-8">
         {/* Header Branding */}
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 grid h-12 w-12 place-items-center rounded-md bg-[#1f3442] text-xl font-bold text-white shadow-sm">
-            ▦
-          </div>
+          <img src={bothiveLogo} alt="Bothive" className="mb-3 h-auto w-52 object-contain" />
           <h1 className="text-lg font-bold uppercase tracking-[0.08em] text-[#1f3442]">
             AMR Fleet Control
           </h1>
-          <p className="text-[11px] uppercase tracking-[0.06em] text-[#8b969b]">
-            SIH 2026 · Edge Coordination Platform
-          </p>
         </div>
 
         {/* Mode Switcher */}

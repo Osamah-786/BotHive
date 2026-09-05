@@ -1,188 +1,226 @@
 # EDGE FLEET
 
-EDGE FLEET is a browser-based AMR warehouse simulation for comparing two fleet-coordination strategies under the same workload:
+EDGE FLEET is a browser-based AMR warehouse simulation for comparing a
+centralized planner with a simulated decentralized coordination model. It is
+an application-level simulation only: it does not connect to physical robots,
+hardware, a backend, a database, a cloud service, or a real P2P network.
 
-- **Traditional**: a centralized planner with simulated cloud latency and static robot-ID priority.
-- **Proposed**: a decentralized, local-planning model with simulated peer state, heartbeat failure detection, priority-based conflict resolution, and recovery.
+## Current Features
 
-Both strategies run side by side so task throughput, idle time, conflicts, battery, charging, and failure behavior can be inspected together. This is a simulation and dashboard; it does not connect to physical robots, a cloud service, or a real P2P network.
+### Branding and UI
 
-## Project Overview
+- Bothive branding uses the existing [`logo/bothive.png`](./logo/bothive.png)
+  asset.
+- The shared Header provides:
+  - Simulation and Dashboard navigation
+  - Run/pause, restart, and speed controls
+  - Chaos controls for cloud kill, robot KILL/ALIVE/SILENCE, battery reduction,
+    aisle blocking, and Grid Power
+  - Compact custom transport-task controls
+  - Authenticated user/role display, profile dropdown, and logout
+- `/` is the Simulation view. It displays one active warehouse viewport with
+  tabs for Centralized Cloud planner and Decentralized P2P mesh. Both engines
+  continue to advance while the tab selects the view.
+- `/dashboard` displays live telemetry, charts, robot health, dispatch
+  priority, utilization, reservation status, and simulated peer links.
 
-EDGE FLEET models AMRs moving boxes through a warehouse and provides a direct comparison between centralized planning and the proposed decentralized coordination model. The two engines receive the same logical tick and workload, but use different planning and conflict policies.
+### Authentication
 
-## Current Simulation
+- `/login` and `/signup` are provided by the shared login/signup component.
+- `/` and `/dashboard` are protected routes and redirect to `/login` when
+  unauthenticated.
+- Demo accounts and newly created accounts are persisted in
+  `sessionStorage` through Zustand under `edge-fleet-auth`.
+- Email matching trims and lowercases the address; passwords are matched
+  exactly.
+- Roles are `admin` and `user`.
+- Normal signup always creates a `user`.
+- An authenticated admin can create another admin with Add Admin.
+- The Header profile dropdown displays the current username, email, role, and
+  a masked password (`••••••••`). It never displays the actual password.
+- Logout clears the authenticated session and returns to `/login`.
+- This is prototype/client-side authentication and is **not production-secure**:
+  there is no backend, database, password hashing, server-side session
+  validation, or production security boundary.
 
-- Three robots run on each side: **R1**, **R2**, and **R3**.
-- The fixed warehouse is a 20 x 14 grid with shelves, pickup stations `P1`-`P3`, dropoff stations `D1`-`D3`, and charging stations `C1` and `C2`.
-- Charging stations use canonical logical cells `C1 = (2, 12)` and `C2 = (17, 1)`; the Phaser renderer uses those same grid coordinates.
-- Each robot follows pickup -> carry -> dropoff for its assigned station index.
-- A robot carries one box at a time. A delivery is counted only after confirmed arrival at the dropoff.
-- The simulation view renders a carrying robot with one clearly separated cardboard box; the box is attached while carrying and removed on dropoff.
-- Source inventory starts with two boxes at each pickup stack, six boxes total. When inventory is exhausted, robots may finish existing dropoffs but cannot start another pickup cycle.
-- When all work is complete, robots route back to their original pickup positions and freeze there.
-- The deterministic simulation tick is 200 ms at 1x. Controls provide play/pause, restart, and 0.5x, 1x, 2x, and 4x rates.
+## Warehouse and Robots
 
-## Task & Inventory Management
+- The logical warehouse is a canonical 20×14 grid.
+- The fleet contains R1, R2, and R3 on both simulation sides.
+- Fixed stations are:
+  - Pickup: P1 `(1,2)`, P2 `(1,7)`, P3 `(1,11)`
+  - Drop-off: D1 `(18,2)`, D2 `(18,7)`, D3 `(18,11)`
+  - Charging: C1 `(2,12)`, C2 `(17,1)`
+- The UI exposes six physical aisles:
+  - Aisle 1 → `(1,2)`
+  - Aisle 2 → `(1,7)`
+  - Aisle 3 → `(1,11)`
+  - Aisle 4 → `(18,2)`
+  - Aisle 5 → `(18,7)`
+  - Aisle 6 → `(18,11)`
+- These are logical grid coordinates. Phaser converts them to visual positions;
+  the UI does not use pixel coordinates for task assignment.
 
-- `stackBoxes` tracks remaining inventory at each source stack; `remainingBoxes` tracks all undelivered boxes.
-- Pickup requires inventory at the robot's assigned source stack.
-- Only a real pickup -> dropoff transition increments delivery metrics. Recovery progress is not counted twice.
-- Empty stacks freeze robots at pickup instead of creating cargo that does not exist.
-- When total inventory reaches zero, only in-progress dropoff or cargo rescue may continue, preventing fake deliveries.
-- A robot with unfinished work can have its assignment inherited after failure. Cargo carried by a failed robot is recovered from its last physical position.
+## Fixed Workload and Cargo
 
-## Robot Failure & Recovery
+- The normal workload starts with two boxes at each pickup stack: six boxes
+  total.
+- `stackBoxes` stores per-stack inventory and `remainingBoxes` stores total
+  undelivered fixed-workload boxes.
+- Normal work follows pickup → carry → drop-off for the robot's station
+  assignment. One robot carries one visible box at a time.
+- Fixed inventory is consumed only by normal fixed deliveries. Completed robots
+  return to their immutable starting pickup position and freeze.
 
-- **KILL** marks a selected robot killed until **ALIVE** is pressed. It freezes in place and keeps its unfinished task state.
-- **SILENCE** stops a selected robot's simulated heartbeats on the proposed side. Peers mark it suspected, then failed after the heartbeat timeout.
-- **ALIVE** clears the manual failure and allows reconnection. Work already owned by a coverer remains protected from duplication.
-- Proposed robots maintain peer health locally, so failure detection is decentralized within the simulation.
-- Eligible robots inherit unfinished tasks from killed or detected-failed peers, selected by route cost, battery, urgency, and robot ID.
-- Failed and killed robots remain at their last cells and are dynamic physical obstacles for navigation and collision resolution.
-- `coveringForRobotId` protects recovery ownership when a failed robot reconnects.
-- Cargo carried by a failed robot is represented as a rescue task: an eligible coverer travels to the failed robot's last position, completes the dropoff, and then resumes normal work.
+## Custom Transport Tasks
 
-## Battery & Energy Management
+- The Header form assigns one task to any robot:
+  - R1, R2, or R3
+  - one of the six pickup aisles
+  - a different drop-off aisle
+- Each robot stores at most one pending custom transport task.
+- The lifecycle is pickup → carry → drop-off:
+  1. Navigate to the selected pickup coordinate.
+  2. Pick up exactly one visible box using the existing cargo mechanism.
+  3. Carry it to the selected drop-off coordinate.
+  4. Remove the cargo and count one completed custom task.
+- Custom tasks do **not** decrement `stackBoxes` or `remainingBoxes`.
+- After completion, the robot returns to its immutable home and freezes:
+  - R1 → P1
+  - R2 → P2
+  - R3 → P3
+- Custom tasks preserve the existing battery, failure, recovery, pathfinding,
+  and collision behavior.
 
-- Robots start at **100%** battery.
-- `MAX_TASKS = 10` is a per-robot task-capacity guard and is separate from the six-box warehouse workload.
-- Each successful delivery consumes **10%** battery (`100 / MAX_TASKS`). Movement and recovery progress do not consume battery.
-- At or below the **20%** threshold, a robot on the pickup leg diverts to charge before another pickup.
-- Charging is automatic, targets **100%**, and adds **10 percentage points per simulation tick**.
-- The current task and station assignment are preserved while the robot travels to, waits for, or occupies a charger.
-- `goingToCharge` state is preserved while traveling cell-by-cell to the charger (preventing movement resolution from overwriting state), cleanly transitioning to `charging` upon arrival at `C1` or `C2`.
-- **Battery -** controls reduce a selected robot's battery by 10 percentage points manually so automatic charging behavior can be tested and demonstrated.
+## Simulation Engines
 
-## Charging Stations & UI Notifications
+Both engines receive the same logical tick from the React animation loop and
+maintain separate robot/metric state.
 
-- There are two stations, `C1` and `C2`.
-- Automatic charger selection uses the existing A* pathfinder and chooses the shortest available route.
-- A reservation is held while a robot is going to or occupying a station; only one robot may reserve each station (`reservedChargingStations`).
-- If both stations are occupied, a low-battery robot waits and retries on later ticks.
-- The reservation is released when charging reaches 100% and the robot leaves charging.
-- Killed and failed robots do not hold reservations.
-- **Charging UI Notification**: When a robot is actively in `charging` state, a floating light-green notification overlay appears in the top-right of the active warehouse view:
-  - Displays electric `⚡` indicator icon, robot ID (colored), `CHARGING` status, live battery %, and assigned charger label (`C1`/`C2`).
-  - Active strictly when `robot.state === 'charging'` (does not render while merely `goingToCharge`).
-  - Automatically disappears when charging completes at 100% or state leaves `charging`.
-  - Supports multiple robots charging simultaneously.
+### Traditional
 
-## Warehouse Power Outage
+- Centralized planner behavior is simulated locally in the browser.
+- Planner refresh frequency is affected by the cloud-latency setting.
+- It uses static robot-ID priority and a one-step reservation horizon.
+- The cloud-kill control freezes the Traditional side.
+- It does not represent a real cloud server or network request.
 
-- **Grid power** (`warehousePower`) is a global boolean in the Zustand store; the **Grid power** button in the chaos panel toggles it off/on.
-- When power is **OFF**, charging stations `C1` and `C2` become unavailable to both Traditional and Decentralized engines.
-- Robots that are en route to charge (`goingToCharge`) enter waiting/power-saving behavior; no separate `powerSaving` state was added — the existing `waiting` state is reused.
-- Robots already in `charging` state stop gaining battery for the duration of the outage.
-- Power restoration allows normal charging to resume immediately on the next tick.
-- Active tasks, current positions, battery levels, and collision-avoidance logic are fully preserved during an outage; simulation continues uninterrupted.
-- Both Traditional and Decentralized modes pass the `powerOutage` flag through their tick functions (`traditionalTick` / `proposedTick`), so the behavior is symmetric.
-- **Visual**: The Phaser warehouse scene renders a dim dark overlay (`powerOverlay`) and reduces station sprite alpha when power is off, giving the warehouse a low-power/dim appearance.
-- **UI Notification**: A pulsing `WAREHOUSE POWER OFF — C1/C2 unavailable / Robots in power-saving mode` banner replaces the normal charging overlay in the top-right of the simulation view for the duration of the outage.
+### Proposed
 
+- Each robot plans locally with A* and uses simulated peer state.
+- Peer health and heartbeat last-seen values are maintained in application
+  state. SILENCE causes suspected/failed status after configured tick
+  thresholds.
+- Conflict resolution considers urgency, battery, task timestamp, and robot
+  ID, and may choose cooperative moves or reroute around reservations.
+- Simulated P2P links are rendered on the Proposed view.
+- Cloud kill does not stop Proposed planning.
+- This is not real decentralized networking: all communication, heartbeat
+  handling, and failure detection run inside the browser/application.
 
-## Navigation & Collision Avoidance
+## Collision and Deadlock Prevention
 
-- Global routes use grid-based **A*** with a Manhattan heuristic.
-- Shelves, manually blocked cells, and failed or killed robots are impassable to ordinary navigation.
-- The shared collision resolver prevents same-cell moves and direct cell swaps.
-- Traditional uses a one-step horizon, static priority (`R1` before `R2` before `R3`), stop-and-wait conflicts, and no local reroute around a newly blocked aisle until its centralized route refreshes.
-- Proposed predicts conflicts up to three steps ahead, compares priority in the order `urgency -> battery -> timestamp (oldest task) -> robot ID`, and can choose cooperative moves or reroute around reservations.
-- **ORCA is not implemented.** Proposed movement uses the repository's cooperative reservation and A* rerouting logic.
+- A* uses the canonical grid and Manhattan-distance pathfinding.
+- Shelves, dynamic blocked cells, and failed/killed robot cells are obstacles
+  for ordinary navigation.
+- The shared resolver prevents:
+  - two robots entering the same physical cell
+  - two robots directly swapping cells in one tick
+- Reservations cover predicted trajectories. When conflicts occur, priority
+  determines who proceeds; lower-priority robots yield, re-plan, or take a
+  legal cooperative move when possible.
+- This is deterministic grid simulation logic. ORCA and RVO2 are not
+  implemented.
 
-## Dashboard / Chaos Controls
+## Energy and Power
 
-- The simulation and dashboard use the current light industrial 2.5D visual treatment while preserving the warehouse layout, station labels, robot colors, charts, and controls.
-- The dashboard layout reserves space for the chart and dispatch sections so the complete R1, R2, and R3 health rows remain visible with consistent row sizing.
+- Robots start at 100% battery.
+- Each successful fixed delivery consumes 10 percentage points.
+- At or below 20%, a robot on the pickup leg automatically selects an
+  available charger using A*.
+- Charging adds 10 percentage points per tick up to 100%.
+- Charger reservations prevent multiple robots from claiming the same charger;
+  contention causes a robot to wait and retry.
+- Grid Power toggles the global warehouse power state:
+  - chargers become unavailable
+  - robots going to charge enter the existing `waiting` power-saving behavior
+  - robots already charging stop gaining battery
+  - active tasks, positions, and battery values are preserved
+  - the Phaser warehouse dims and shows a power-off notification
+- Restoring power resumes normal charging on later ticks.
 
-- **Compact Metrics Panel Layout**:
-  - The trend chart card uses contained relative positioning (`relative`) to isolate tooltip interactions and has a compact `h-[140px]` height setting in full-page mode to prevent dashboard layout spilling.
-  - Robot Health status list uses flexible grid column layout (`grid-cols-[2.25rem_minmax(0,1fr)_auto]`) with compact padding (`py-1.5`, `space-y-1.5`), ensuring all 3 robots (**R1**, **R2**, **R3**) remain fully represented and visible without vertical clipping.
-- **KILL**, **ALIVE**, and **SILENCE** provide individual robot failure and heartbeat controls.
-- **Battery -** is a testing/debug control that manually decreases a robot's battery by 10% to trigger and demonstrate automatic charging.
-- **Grid power** toggles the warehouse power outage; when off, `C1`/`C2` are unavailable, the warehouse dims visually, and a banner notification is shown in the simulation view.
-- **Block aisle** toggles a dynamic obstacle at the demo aisle; floor-cell interaction is also supported by the warehouse view where available.
-- **Cloud lag** changes centralized planner refresh intervals from 20 ms to 2000 ms and does not delay Proposed.
-- **Kill cloud** freezes Traditional; restoring the cloud lets it continue. Proposed is independent of this simulated flag.
-- **Run/Pause, Restart, and Rate** control the shared clock.
-- The dashboard shows task progress, idle time, conflicts, robot health, route load, charging reservations, and Proposed peer links.
+## Failure and Recovery
 
-## Authentication (Demo/Prototype)
+- **KILL** freezes a selected robot and preserves its unfinished state.
+- **SILENCE** stops simulated heartbeats for a selected robot on the Proposed
+  side. Peers track last-seen ticks and eventually mark it failed.
+- **ALIVE** clears the manual failure condition and permits reconnection.
+- Killed and failed robots remain at their last physical cell and act as
+  dynamic obstacles.
+- Eligible peers inherit unfinished work. The inherited assignment preserves
+  custom transport state when applicable.
+- If a failed robot was carrying cargo, a coverer navigates to its last
+  position, recovers the cargo, completes the drop-off, and continues.
+- Recovery and handoff are local simulation behavior, not hardware or network
+  recovery.
 
-- `/login` and `/signup` provide email/password login and account creation.
-- `/` (Simulation) and `/dashboard` are protected routes and redirect unauthenticated users to `/login`.
-- Authentication state and locally created accounts persist in `sessionStorage`; there is no backend, database, hashing service, or production session security.
-- Roles are `admin` and `user`. Normal signup always creates a `user`; an authenticated admin can create another admin through **Add Admin**.
-- The header displays the current role and provides **Logout**.
-- This authentication is a client-side demonstration/prototype only and must not be treated as production security.
+## Controls and Runtime
 
-## Important Architecture Notes
+- Base logical tick: 200 ms at 1×.
+- Available speeds: 0.5×, 1×, 2×, and 4×.
+- Run/pause and restart control the shared simulation clock.
+- The warehouse renderer is Phaser-based; charts use Recharts and state is
+  held in Zustand.
 
-- React and TypeScript provide the UI; Vite builds it; Zustand owns simulation state.
-- `src/engine/traditional.ts` and `src/engine/proposed.ts` implement the two tick engines.
-- `src/engine/simulation.ts` contains shared task, inventory, battery, charging, heartbeat, kill/reconnect, and recovery lifecycle logic.
-- `src/engine/astar.ts` owns pathfinding, while `src/engine/conflictResolution.ts` owns movement safety and cooperative resolution.
-- The React animation loop advances both engines from the same logical tick and commits results to Zustand.
-- Charging uses explicit `goingToCharge` and `charging` states; reservations derive from live robot state.
-- Visual storage stacks mirror the source-stack inventory model; they are not a separate inventory system.
-- Proposed green peer links are rendered from simulated `P2PLink` state. They do not represent real network traffic.
-- The `warehousePower` boolean in the Zustand store drives the `powerOutage` flag passed to both tick engines and to the Phaser renderer each frame; no separate robot state was added for power-saving mode.
+## Limitations and Planned Work
 
-## Current Limitations / Not Yet Implemented
+The following are not implemented and remain Planned/Future:
 
-- This is a deterministic browser simulation, not hardware control or a production fleet-management system.
-- Cloud, peer-to-peer communication, heartbeat loss, robot kills, and reconnection are local simulations. There is no network transport, physical telemetry, or cloud backend.
-- ORCA and physics-based motion are not implemented; movement is grid-cell based.
-- The workload is fixed at six boxes with three fixed pickup/dropoff assignments; there is no external task queue or dynamic warehouse data source.
-- Centralized cloud latency is represented by deterministic refresh intervals, not measured network latency or a remote planner.
-- Deployment, a hosted demo URL, and the planned headless validation script are not part of the current repository workflow.
+- physical AMR or hardware integration
+- real cloud infrastructure or P2P networking
+- backend/database services
+- production authentication and password security
+- ORCA/RVO2 or physics-based motion
+- external task queues or dynamic warehouse data sources
+- hosted deployment and a recorded demo GIF
 
-
-## Tech Stack
-
-| Layer | Technology |
-| --- | --- |
-| UI | React 19, TypeScript, Vite |
-| Warehouse rendering | Phaser 4 |
-| State | Zustand |
-| Charts | Recharts |
-| UI components | shadcn/ui and Tailwind CSS |
-| Pathfinding | Custom A* with Manhattan heuristic |
-| Movement coordination | Shared collision resolver; proposed cooperative reservations and rerouting |
-
-## Project Structure
-
-```text
-src/
-├── engine/
-│   ├── astar.ts               # Grid pathfinding
-│   ├── conflictResolution.ts  # Collision and reservation resolution
-│   ├── proposed.ts            # Decentralized tick engine
-│   ├── simulation.ts          # Shared lifecycle and task helpers
-│   ├── traditional.ts         # Centralized tick engine
-│   ├── types.ts               # Shared state contracts
-│   └── warehouse.ts           # Fixed grid and station definitions
-├── store/
-│   └── useSimStore.ts         # Zustand state and controls
-└── components/
-    ├── layout/                # Header, split view, chaos controls, metrics
-    ├── simulation/            # Phaser warehouse and simulation visuals
-    └── ui/                     # Reusable interface components
-```
-
-## Run Locally
+## Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-Build and type-check with:
+Validation commands:
 
 ```bash
+npm run typecheck
 npm run build
 ```
 
-## Team
+## Project Structure
 
-SIH 2026 - Edge coordination for AMR fleets
+```text
+src/
+├── engine/
+│   ├── astar.ts
+│   ├── conflictResolution.ts
+│   ├── proposed.ts
+│   ├── simulation.ts
+│   ├── traditional.ts
+│   ├── types.ts
+│   └── warehouse.ts
+├── store/
+│   ├── useAuthStore.ts
+│   └── useSimStore.ts
+└── components/
+    ├── layout/
+    │   ├── Header.tsx
+    │   ├── LoginPage.tsx
+    │   ├── CreateTransportTask.tsx
+    │   ├── ChaosPanel.tsx
+    │   ├── MetricsPanel.tsx
+    │   └── SplitView.tsx
+    └── simulation/
+        └── PhaserWarehouse.tsx
+```

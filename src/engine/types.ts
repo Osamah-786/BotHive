@@ -32,6 +32,11 @@ export interface PeerHealth {
   status: PeerHealthStatus;
 }
 
+export interface TransportTask {
+  pickup: { x: number; y: number };
+  dropoff: { x: number; y: number };
+}
+
 export interface Robot {
   id: string; // "R1" | "R2" | "R3"
   color: string; // hex color string
@@ -77,6 +82,12 @@ export interface Robot {
 
   /** Total pick→drop cycles completed */
   tasksCompleted: number;
+
+  /** One dashboard-created transport task waiting for this robot. */
+  pendingTransportTask?: TransportTask;
+
+  /** Set after a custom delivery until the robot reaches its immutable home. */
+  returningHomeAfterTransport?: boolean;
 
   /**
    * If this robot is currently covering for a killed robot, this is the

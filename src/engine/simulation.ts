@@ -32,6 +32,11 @@ export function taskTarget(robot: Robot): GridPos {
   // A robot in rescue mode must first reach the death position of the killed
   // robot to "pick up" the stranded cargo before heading to the dropoff station.
   if (robot.rescueFromPosition) return robot.rescueFromPosition;
+  if (robot.pendingTransportTask) {
+    return robot.task === 'pickup'
+      ? robot.pendingTransportTask.pickup
+      : robot.pendingTransportTask.dropoff;
+  }
   const stations = robot.task === 'pickup' ? PICKUP_STATIONS : DROPOFF_STATIONS;
   return stations[robot.stationIndex];
 }
@@ -54,6 +59,8 @@ export function isWorkFinished(
   stackBoxes: number[],
 ): boolean {
   if (robot.rescueFromPosition !== undefined) return false;
+  if (robot.returningHomeAfterTransport) return true;
+  if (robot.pendingTransportTask !== undefined) return false;
   if (robot.task === 'dropoff') return false;
   if (robot.tasksCompleted >= MAX_TASKS) return true;
   if (remainingBoxes <= 0) return true;
@@ -249,11 +256,14 @@ function consumeTaskEnergy(battery: number): number {
 export function advanceTaskAfterArrival(robot: Robot, tick: number): Robot {
   const arrivedAtDropoff = robot.task === 'dropoff';
   const newTasksCompleted = robot.tasksCompleted + (arrivedAtDropoff ? 1 : 0);
+  const completedTransportTask = arrivedAtDropoff && robot.pendingTransportTask !== undefined;
 
   return {
     ...robot,
     task: arrivedAtDropoff ? 'pickup' : 'dropoff',
     path: [],
+    pendingTransportTask: completedTransportTask ? undefined : robot.pendingTransportTask,
+    returningHomeAfterTransport: completedTransportTask ? true : robot.returningHomeAfterTransport,
     urgency: urgencyFor(robot.id, tick),
     // Simulation ticks are deterministic; this timestamp is a stable tiebreaker.
     timestamp: tick * BASE_TICK_MS,
@@ -305,13 +315,29 @@ export function finalizeBoxInventory(
     const previous = previousById.get(robot.id);
     return total + Math.max(0, robot.tasksCompleted - (previous?.tasksCompleted ?? robot.tasksCompleted));
   }, 0);
-  const nextRemaining = Math.max(0, remainingBoxes - completedThisTick);
+  const customCompletedThisTick = robots.reduce((total, robot) => {
+    if (robot.state === 'killed' || robot.state === 'failed') return total;
+    const previous = previousById.get(robot.id);
+    return total + (
+      previous?.pendingTransportTask !== undefined &&
+      robot.pendingTransportTask === undefined &&
+      robot.tasksCompleted > (previous?.tasksCompleted ?? robot.tasksCompleted)
+        ? 1
+        : 0
+    );
+  }, 0);
+  const fixedCompletedThisTick = Math.max(0, completedThisTick - customCompletedThisTick);
+  const nextRemaining = Math.max(0, remainingBoxes - fixedCompletedThisTick);
   const nextStackBoxes = [...stackBoxes];
   for (const robot of robots) {
     if (robot.state === 'killed' || robot.state === 'failed') continue;
     const previous = previousById.get(robot.id);
     const completed = Math.max(0, robot.tasksCompleted - (previous?.tasksCompleted ?? robot.tasksCompleted));
-    if (completed > 0) {
+    const customCompleted =
+      previous?.pendingTransportTask !== undefined &&
+      robot.pendingTransportTask === undefined &&
+      robot.tasksCompleted > (previous?.tasksCompleted ?? robot.tasksCompleted);
+    if (completed > 0 && !customCompleted) {
       nextStackBoxes[robot.stationIndex] = Math.max(
         0,
         (nextStackBoxes[robot.stationIndex] ?? 0) - completed,
@@ -389,7 +415,8 @@ export function applyTaskInheritance(
   const failedWithWork = robots.filter(
     (r) =>
       (killedRobots.has(r.id) || failedRobots.has(r.id)) &&
-      (r.task === 'dropoff' ||
+      (r.pendingTransportTask !== undefined ||
+        r.task === 'dropoff' ||
         (r.task === 'pickup' && (stackBoxes[r.stationIndex] ?? 0) > 0)),
   );
   if (failedWithWork.length === 0) return robots;
@@ -433,6 +460,12 @@ export function applyTaskInheritance(
       path: [],
       state: 'moving',
       task: wasCarryingStock ? 'pickup' : failedRobot.task,
+      pendingTransportTask: failedRobot.pendingTransportTask
+        ? {
+            pickup: { ...failedRobot.pendingTransportTask.pickup },
+            dropoff: { ...failedRobot.pendingTransportTask.dropoff },
+          }
+        : undefined,
       rescueFromPosition: wasCarryingStock
         ? { x: failedRobot.position.x, y: failedRobot.position.y }
         : undefined,

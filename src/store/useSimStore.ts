@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import type { Robot, SimMetrics, P2PLink } from '../engine/types';
+import type { Robot, SimMetrics, P2PLink, TransportTask } from '../engine/types';
 import { TOTAL_BOXES, urgencyFor } from '../engine/simulation';
 import {
   PICKUP_STATIONS,
   DROPOFF_STATIONS,
   CHARGING_STATIONS,
+  isPassable,
 } from '../engine/warehouse';
 
 // ─── Colour palette (matches plan) ───────────────────────────────────────────
@@ -92,6 +93,11 @@ export interface SimStore {
   reviveRobot: (id: string) => void;
   toggleRobotUnresponsive: (id: string) => void;
   decreaseRobotBattery: (id: string, amount: number) => void;
+  createTransportTask: (
+    robotId: string,
+    pickup: TransportTask['pickup'],
+    dropoff: TransportTask['dropoff'],
+  ) => { success: boolean; error?: string };
 
   /** Toggle the warehouse power grid (outage simulation). */
   toggleWarehousePower: () => void;
@@ -106,7 +112,7 @@ export interface SimStore {
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
-export const useSimStore = create<SimStore>((set) => ({
+export const useSimStore = create<SimStore>((set, get) => ({
   // ── Control ─────────────────────────────────────────────────────────────────
   // There are no visible controls until Phase 4, so Phase 3 starts autonomously.
   isPlaying: true,
@@ -196,6 +202,50 @@ export const useSimStore = create<SimStore>((set) => ({
       else next.add(id);
       return { unresponsiveRobots: next };
     }),
+
+  createTransportTask: (robotId, pickup, dropoff) => {
+    const state = get();
+    const isValidLocation = (position: TransportTask['pickup']) =>
+      Number.isInteger(position.x) &&
+      Number.isInteger(position.y) &&
+      isPassable(position.x, position.y, state.blockedCells);
+
+    if (!state.traditional.robots.some((robot) => robot.id === robotId)) {
+      return { success: false, error: 'Unknown robot' };
+    }
+    if (!isValidLocation(pickup) || !isValidLocation(dropoff)) {
+      return { success: false, error: 'Invalid warehouse location' };
+    }
+    if (pickup.x === dropoff.x && pickup.y === dropoff.y) {
+      return { success: false, error: 'Pickup and drop-off must differ' };
+    }
+
+    const pendingTransportTask: TransportTask = {
+      pickup: { ...pickup },
+      dropoff: { ...dropoff },
+    };
+
+    set((current) => ({
+      traditional: {
+        ...current.traditional,
+        robots: current.traditional.robots.map((robot) =>
+          robot.id === robotId
+            ? { ...robot, pendingTransportTask, returningHomeAfterTransport: undefined }
+            : robot,
+        ),
+      },
+      proposed: {
+        ...current.proposed,
+        robots: current.proposed.robots.map((robot) =>
+          robot.id === robotId
+            ? { ...robot, pendingTransportTask, returningHomeAfterTransport: undefined }
+            : robot,
+        ),
+      },
+    }));
+
+    return { success: true };
+  },
 
   decreaseRobotBattery: (id, amount) =>
     set((state) => ({

@@ -73,6 +73,21 @@ export function resolveRobotMoves(
     conflictParticipants.add(second.id);
   }
 
+  // The serialized cloud reservations can deadlock when two robots request
+  // each other's current cells in the same tick. Use the existing joint
+  // solver for that tick so priority can make one robot yield and re-plan.
+  if (
+    !options.allowReroute &&
+    (hasDirectSwap(plannedRobots, options.blockedCells) || predictedPairs.length > 0)
+  ) {
+    return resolveCooperativeMoves(
+      plannedRobots,
+      { ...options, allowReroute: true },
+      conflictParticipants,
+      predictedPairs.length,
+    );
+  }
+
   // The decentralized side has peer visibility, so it can solve all three
   // moves together instead of making an isolated pairwise wait decision.
   // This is what breaks circular waits at a one-cell aisle or the bottom lane.
@@ -103,6 +118,11 @@ export function resolveRobotMoves(
       continue;
     }
     if (robot.tasksCompleted >= MAX_TASKS) {
+      reservations.push({ robotId: robot.id, trajectory: holdTrajectory(robot.position, horizon) });
+      resolvedById.set(robot.id, { ...robot, state: 'frozen', path: [] });
+      continue;
+    }
+    if (robot.returningHomeAfterTransport && sameCell(robot.position, taskTarget(robot))) {
       reservations.push({ robotId: robot.id, trajectory: holdTrajectory(robot.position, horizon) });
       resolvedById.set(robot.id, { ...robot, state: 'frozen', path: [] });
       continue;
@@ -164,6 +184,9 @@ function resolveCooperativeMoves(
         : advanceCharging(robot);
     }
     if (robot.tasksCompleted >= MAX_TASKS) return { ...robot, state: 'frozen' as const, path: [] };
+    if (robot.returningHomeAfterTransport && sameCell(robot.position, taskTarget(robot))) {
+      return { ...robot, state: 'frozen' as const, path: [] };
+    }
     const candidate = selected[index];
     if (!candidate || sameCell(candidate.position, robot.position)) {
       return waitRobot(robot, conflictParticipants.has(robot.id));
@@ -222,7 +245,10 @@ function buildMoveCandidates(
       route: localRoute,
       // Progress decides who gets a contested route; the movement bonus lets a
       // lower-priority robot temporarily reverse to clear a blocked aisle.
-      score: 2 + progress * 10 * priorityWeight + (isPreferred ? 4 * priorityWeight : 0),
+      // A legal retreat must beat waiting when robots face one another in a
+      // one-cell corridor; otherwise both robots can remain waiting forever.
+      score: Math.max(0, 2 + progress * 10 * priorityWeight) +
+        (isPreferred ? 4 * priorityWeight : 0),
     });
   };
 
@@ -382,6 +408,29 @@ function trajectoriesConflict(first: GridPos[], second: GridPos[]): boolean {
     ) {
       return true;
     }
+
+  }
+  return false;
+}
+
+function hasDirectSwap(robots: Robot[], blockedCells: Set<string>): boolean {
+  for (let left = 0; left < robots.length; left += 1) {
+    for (let right = left + 1; right < robots.length; right += 1) {
+      const first = robots[left];
+      const second = robots[right];
+      const firstRoute = usableRoute(first.path, navigationBlockedCells(first, blockedCells));
+      const secondRoute = usableRoute(second.path, navigationBlockedCells(second, blockedCells));
+      const firstNext = firstRoute[0];
+      const secondNext = secondRoute[0];
+      if (
+        firstNext &&
+        secondNext &&
+        sameCell(firstNext, second.position) &&
+        sameCell(secondNext, first.position)
+      ) {
+        return true;
+      }
+    }
   }
   return false;
 }
@@ -419,8 +468,11 @@ function advanceRobot(
       // the real dropoff station. DO NOT call advanceTaskAfterArrival (that
       // would phantom-increment tasksCompleted).
       moved = { ...moved, task: 'dropoff', rescueFromPosition: undefined, path: [] };
+    } else if (moved.returningHomeAfterTransport) {
+      moved = { ...moved, state: 'frozen', path: [] };
     } else if (
       moved.task === 'pickup' &&
+      moved.pendingTransportTask === undefined &&
       stackBoxes &&
       !hasAvailablePickupBox(moved, stackBoxes)
     ) {

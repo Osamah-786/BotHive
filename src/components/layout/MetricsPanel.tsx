@@ -83,12 +83,12 @@ export function MetricsPanel({ fullPage }: { fullPage?: boolean }) {
 
         {fullPage && (
           <DispatchDesk
-            tick={tick}
-            cloudRobots={traditionalRobots}
-            meshRobots={proposedRobots}
-            cloudMetrics={traditional}
-            meshMetrics={proposed}
-            peerLinks={p2pLinks}
+              tick={tick}
+              cloudRobots={traditionalRobots}
+              meshRobots={proposedRobots}
+              cloudMetrics={traditional}
+              meshMetrics={proposed}
+              peerLinks={p2pLinks}
           />
         )}
       </div>

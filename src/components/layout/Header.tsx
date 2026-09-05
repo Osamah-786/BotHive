@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChaosPanel } from './ChaosPanel';
 import { SimControls } from '../ui/SimControls';
 import { Link, useRoute, useLocation } from 'wouter';
 import { useAuthStore } from '../../store/useAuthStore';
 import { AddAdminModal } from './AddAdminModal';
-import { LogOut, UserPlus, Shield } from 'lucide-react';
+import { LogOut, UserPlus, Shield, UserRound } from 'lucide-react';
+import { CreateTransportTask } from './CreateTransportTask';
+import bothiveLogo from '../../../logo/bothive.png';
 
 /** Compact industrial header shared by the simulation and dashboard routes. */
 export function Header() {
@@ -15,8 +17,24 @@ export function Header() {
 
   const { isAuthenticated, currentUser, logout } = useAuthStore();
   const [isAddAdminOpen, setIsAddAdminOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isProfileOpen) return;
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [isProfileOpen]);
 
   const handleLogout = () => {
+    setIsProfileOpen(false);
     logout();
     setLocation('/login');
   };
@@ -34,13 +52,8 @@ export function Header() {
         <div className="flex items-center gap-4 whitespace-nowrap">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-2 font-sans text-[11px] font-bold tracking-[0.08em] text-[#1f3442] uppercase">
-              <span className="grid h-5 w-5 place-items-center rounded-sm bg-[#1f3442] text-[9px] text-white">
-                ▦
-              </span>
+              <img src={bothiveLogo} alt="Bothive" className="h-7 w-28 object-contain" />
               AMR Fleet Control
-            </span>
-            <span className="hidden font-sans text-[9px] tracking-[0.08em] text-[#8b969b] uppercase sm:inline">
-              SIH 2026 · Edge coordination
             </span>
           </div>
 
@@ -73,6 +86,7 @@ export function Header() {
         <div className="flex items-center gap-3">
           <SimControls />
           <ChaosPanel />
+          <CreateTransportTask />
 
           {/* User Auth Session info & Controls */}
           {isAuthenticated && currentUser && (
@@ -104,6 +118,48 @@ export function Header() {
                   <span className="hidden md:inline">Add Admin</span>
                 </button>
               )}
+
+              <div ref={profileRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsProfileOpen((open) => !open)}
+                  title="View profile"
+                  aria-label="View profile"
+                  aria-expanded={isProfileOpen}
+                  className="flex items-center justify-center rounded border border-[#d9d6d0] bg-white p-1.5 text-[#52636b] transition-colors hover:border-[#e4b04f] hover:bg-[#fffaf0] hover:text-[#1f3442]"
+                >
+                  <UserRound size={14} />
+                </button>
+                {isProfileOpen && (
+                  <div className="absolute right-0 top-full z-30 mt-2 w-56 rounded-md border border-[#d9d6d0] bg-white p-3 text-left shadow-lg">
+                    <div className="mb-2 border-b border-[#eeeae3] pb-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#1f3442]">
+                        Profile
+                      </p>
+                    </div>
+                    <dl className="space-y-2 text-[10px]">
+                      <div>
+                        <dt className="font-bold uppercase tracking-wider text-[#8b969b]">Username</dt>
+                        <dd className="mt-0.5 text-[#1f3442]">{currentUser.name}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-bold uppercase tracking-wider text-[#8b969b]">Email</dt>
+                        <dd className="mt-0.5 break-all text-[#1f3442]">{currentUser.email}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-bold uppercase tracking-wider text-[#8b969b]">Role</dt>
+                        <dd className="mt-0.5 text-[#1f3442]">
+                          {currentUser.role === 'admin' ? 'Admin' : 'User'}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="font-bold uppercase tracking-wider text-[#8b969b]">Password</dt>
+                        <dd className="mt-0.5 tracking-widest text-[#1f3442]">••••••••</dd>
+                      </div>
+                    </dl>
+                  </div>
+                )}
+              </div>
 
               {/* Logout button */}
               <button

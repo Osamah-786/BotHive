@@ -100,7 +100,10 @@ export function PhaserWarehouse({ side }: PhaserWarehouseProps) {
     for (const robot of robots) {
       // An item is in-transit if ANY robot assigned to this rack is physically carrying it.
       // (A dead robot holds it until the coverer completes the rescue transit)
-      const isCarrying = robot.task === 'dropoff' && !robot.rescueFromPosition;
+      const isCarrying =
+        robot.task === 'dropoff' &&
+        !robot.rescueFromPosition &&
+        robot.pendingTransportTask === undefined;
       robotCarrying[robot.stationIndex] = robotCarrying[robot.stationIndex] || isCarrying;
     }
 
