@@ -15,8 +15,10 @@ EDGE FLEET models AMRs moving boxes through a warehouse and provides a direct co
 
 - Three robots run on each side: **R1**, **R2**, and **R3**.
 - The fixed warehouse is a 20 x 14 grid with shelves, pickup stations `P1`-`P3`, dropoff stations `D1`-`D3`, and charging stations `C1` and `C2`.
+- Charging stations use canonical logical cells `C1 = (2, 12)` and `C2 = (17, 1)`; the Phaser renderer uses those same grid coordinates.
 - Each robot follows pickup -> carry -> dropoff for its assigned station index.
 - A robot carries one box at a time. A delivery is counted only after confirmed arrival at the dropoff.
+- The simulation view renders a carrying robot with one clearly separated cardboard box; the box is attached while carrying and removed on dropoff.
 - Source inventory starts with two boxes at each pickup stack, six boxes total. When inventory is exhausted, robots may finish existing dropoffs but cannot start another pickup cycle.
 - The deterministic simulation tick is 200 ms at 1x. Controls provide play/pause, restart, and 0.5x, 1x, 2x, and 4x rates.
 
@@ -74,6 +76,9 @@ EDGE FLEET models AMRs moving boxes through a warehouse and provides a direct co
 - **ORCA is not implemented.** Proposed movement uses the repository's cooperative reservation and A* rerouting logic.
 
 ## Dashboard / Chaos Controls
+
+- The simulation and dashboard use the current light industrial 2.5D visual treatment while preserving the warehouse layout, station labels, robot colors, charts, and controls.
+- The dashboard layout reserves space for the chart and dispatch sections so the complete R1, R2, and R3 health rows remain visible with consistent row sizing.
 
 - **Compact Metrics Panel Layout**:
   - The trend chart card uses contained relative positioning (`relative`) to isolate tooltip interactions and has a compact `h-[140px]` height setting in full-page mode to prevent dashboard layout spilling.

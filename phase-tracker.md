@@ -1,7 +1,7 @@
 # AMR Fleet Simulation — Phase Tracker
 
 > Living document. Update status after each session.
-> Source plan: [amr-simulation-plan.md](file:///Users/khantauhid/college-proh/amr-finale/amr-simulation-plan.md)
+> Source plan: [amr-simulation-plan.md](./amr-simulation-plan.md)
 
 ---
 
@@ -36,6 +36,9 @@
 | Dashboard & Robot Health layout | ✅ Done — compact trend chart height (`h-[140px]`), Tooltip containment (`relative`), flexible grid fitting all 3 robots (R1–R3) |
 | Station labels (P1–D3, C1–C2) | ✅ Done — station indicators on warehouse grid |
 | Robot task-ring indicator | ✅ Done — amber=pickup, orange=dropoff ring |
+| Charging coordinate synchronization | ✅ Done — Phaser C1/C2 visuals use the canonical logical cells `(2,12)` and `(17,1)` |
+| Light industrial UI refresh | ✅ Done — simulation warehouse, controls, panels, charts, and dashboard use the current light visual treatment |
+| Single-box cargo rendering | ✅ Done — carrying visuals show one attached cardboard box without pallet/support shapes |
 
 ---
 
@@ -48,7 +51,7 @@
 | 3 | Simulation Logic | ✅ Complete | #4 |
 | 4 | Controls & Chaos | ✅ Complete | #5 |
 | 5 | Metrics & Polish | ✅ Complete | #7 |
-| 6 | Testing & Demo Prep | 🔲 Not started | — |
+| 6 | Testing & Demo Prep | 🔲 Partial | — |
 
 ---
 
@@ -199,7 +202,10 @@ src/engine/proposed.ts               (modify — respect blockedCells)
 - [x] **5.4** Apply complete warehouse-tone color theme across all components
 - [x] **5.5** Add "CENTRALIZED" and "DECENTRALIZED P2P" banners on each canvas side
 - [x] **5.6** Add robot path-preview dots (faint dots showing A* route ahead)
-- [x] **5.7** Apply `globals.css` — dark background, global font settings, scrollbar, focus ring, keyframes
+- [x] **5.7** Apply `globals.css` — light application background, global font settings, scrollbar, focus ring, keyframes
+- [x] **5.8** Apply the current light industrial visual treatment and correct dashboard/chart/fleet sizing
+- [x] **5.9** Keep C1/C2 visual rendering aligned with logical charging coordinates
+- [x] **5.10** Simplify carrying cargo artwork to one visible box
 
 ### Files to create/modify
 ```
@@ -220,7 +226,7 @@ src/styles/globals.css                     (modify)
 
 ### Tasks
 
-- [ ] **6.1** Run simulation for 200 ticks, verify Proposed ≥ 20% more tasks completed than Traditional
+- [ ] **6.1** Run simulation for 200 ticks and compare observed Traditional/Proposed metrics
 - [ ] **6.2** Verify chaos scenarios work cleanly (no bugs when WiFi killed mid-run)
 - [ ] **6.3** Record demo GIF (suggested: LICEcap / Kap on macOS)
 - [ ] **6.4** `vite build` — verify production build works
@@ -239,6 +245,7 @@ src/styles/globals.css                     (modify)
 | #6 | 2026-08-26 | 4 fix | Centralized cloud routes now remain stale after an aisle block, so affected robots wait until it is cleared. |
 | #7 | 2026-08-26 | 5 | MetricCard + MetricsPanel (3 live Recharts), P2PLines animation, CENTRALIZED/DECENTRALIZED banners, path-preview dots, automatic charging at C1/C2 (10% drain per delivery), station labels (P1–D3, C1–C2), task-ring indicator on robots, Phaser 4 warehouse rendering, and globals.css with scrollbar/focus/keyframes. Build: ✅ |
 | #8 | 2026-09-04 | 5 fix | Fixed MetricsPanel layout (compact h-[140px] chart, Tooltip isolation via relative, flexible status grid fitting R1–R3 without row clipping), fixed `goingToCharge` state preservation during move resolution in conflictResolution.ts, verified charger reservations (C1/C2), and added top-right light-green charging UI overlay notification (`⚡ R1 CHARGING (20%) C1`). Build: ✅ |
+| #9 | 2026-09-05 | 5 polish | Updated the light industrial 2.5D simulation/dashboard presentation, synchronized rendered C1/C2 positions with logical charging cells, and simplified carrying artwork to one clearly identifiable box. Typecheck, build, and diff validation: ✅ |
 
 ---
 

@@ -104,7 +104,7 @@ amr-final/
 ## 🗺️ Warehouse Grid Layout
 
 - **Grid size**: 20 × 14 tiles (top-down view)
-- **Theme**: Warehouse-tone — beige/orange industrial colors
+- **Theme**: Light industrial 2.5D treatment with light-gray surfaces, beige warehouse structures, existing station colors, and preserved robot accents
 - **Cell types**:
 
 | Cell Type | Visual | Color |
@@ -283,7 +283,7 @@ Three **live updating Recharts line charts** below the simulation views:
 - X-axis: Simulation time (ticks)
 - Y-axis: Tasks completed
 - Two lines: Traditional (red) vs. Proposed (green)
-- **Expected result**: Proposed line rises faster → ≥20% more throughput
+- The chart reports the observed task-completion comparison; no fixed throughput advantage is assumed by the implementation.
 
 ### Chart 2 — Fleet Idle Time (Bar or Area Chart)
 - X-axis: Simulation time
@@ -307,11 +307,11 @@ Three **live updating Recharts line charts** below the simulation views:
 
 | Element | Color |
 |---|---|
-| App background | `#1a1209` (very dark brown) |
-| Panel backgrounds | `#2d1f0e` (dark oak) |
-| Grid floor tiles | `#c8a96e` (sandy beige) |
-| Shelf tiles | `#6b4226` (dark wood brown) |
-| Choke aisle | `#b8956a` (slightly different beige) |
+| App background | Light neutral surface |
+| Panel backgrounds | White and light gray |
+| Grid floor tiles | Light warehouse beige |
+| Shelf tiles | Beige/taupe industrial structures |
+| Choke aisle | Light neutral floor |
 | Pickup station | `#f59e0b` (amber) |
 | Dropoff station | `#ea7c1a` (orange) |
 | Obstacle block | `#ef4444` (red) |
@@ -320,9 +320,9 @@ Three **live updating Recharts line charts** below the simulation views:
 | AMR 3 | `#eab308` (yellow) |
 | P2P mesh lines | `#4ade80` (bright green, semi-transparent) |
 | Traditional frozen indicator | Red pulsing glow around robots |
-| Text / labels | `#fef3c7` (warm cream) |
-| Traditional side label | `#ef4444` banner — "CENTRALIZED" |
-| Proposed side label | `#22c55e` banner — "DECENTRALIZED P2P" |
+| Text / labels | Dark blue-gray with muted gray secondary text |
+| Traditional side label | Existing red accent — "CENTRALIZED" |
+| Proposed side label | Existing green accent — "DECENTRALIZED P2P" |
 
 ---
 
@@ -429,7 +429,7 @@ interface SimStore {
 - [ ] Add robot path preview dots
 
 ### Phase 6 — Testing & Demo Prep (Day 5)
-- [ ] Verify ≥20% task throughput advantage for Proposed
+- [ ] Run a fixed-length simulation and compare the observed task throughput of Traditional and Proposed
 - [ ] Record a demo GIF for GitHub README
 - [ ] Build for production (`vite build`)
 - [ ] Deploy to Vercel/Netlify for shareable judge link
@@ -469,7 +469,7 @@ interface SimStore {
 4. **Hit Kill Cloud WiFi** — Traditional side freezes completely. Proposed side continues without blinking.
 5. **Hit Block Aisle** (click an aisle cell) — Traditional robot stops at entrance. Proposed robots detect via P2P and reroute in real-time.
 6. **Drag Latency slider to 2000ms** — Traditional robots visibly slow down at choke points. Proposed barely affected.
-7. **Show final metrics bar chart** — ≥20% faster task completion, dramatically lower idle time.
+7. **Show the final metrics** — compare task completion, idle time, and conflict resolution as observed in the run.
 
 > [!TIP]
 > Start the demo with step 4 ("Kill Cloud WiFi") for maximum judge impact. The visual contrast is immediate and self-explanatory.
@@ -481,7 +481,7 @@ interface SimStore {
 | SIH Requirement | How Simulation Proves It |
 |---|---|
 | Zero inter-robot collisions | Priority token protocol ensures conflict resolution before collision — no overlap in Proposed side |
-| ≥20% faster task completion | Live Recharts chart shows Proposed completing tasks faster over time |
+| Task completion comparison | Live Recharts chart compares Traditional and Proposed completion over time |
 | Decentralized Communication | P2P green mesh lines visible on Proposed side; no central node |
 | Dynamic conflict resolution | Conflict counter + visual negotiation visible at choke points |
 | Task re-routing on blockage | Block Aisle chaos button demonstrates real-time A* replanning |
